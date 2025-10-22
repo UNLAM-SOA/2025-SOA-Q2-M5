@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <!-- Color base (puede ser transparente o de referencia a un color del tema) -->
+    <solid android:color="#FFBBBF"/>
+
+    <!-- Bordes redondeados -->
+    <corners android:radius="12dp"/>
+
+    <!-- (opcional) Borde -->
+    <stroke
+        android:width="2dp"
+        android:color="#B2B6BA" />
+
+</shape>
