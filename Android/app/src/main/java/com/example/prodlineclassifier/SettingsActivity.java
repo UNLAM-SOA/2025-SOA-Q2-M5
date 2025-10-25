@@ -33,6 +33,7 @@ import mqtt.MQTTManager;
 import mqtt.MQTTService;
 import mqtt.viewmodel.MQTTViewModel;
 import observer.topicmanager.ConveyorBeltSpeedListener;
+import observer.topicmanager.ErrorListener;
 import observer.topicmanager.TopicPublisher;
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -70,6 +71,7 @@ public class SettingsActivity extends AppCompatActivity {
         setViewModelResponses();
 
         TopicPublisher.events.subscribe(username + "/feeds/dcengine", new ConveyorBeltSpeedListener<>(mqttViewModel));
+        TopicPublisher.events.subscribe(Constants.CREDENTIALS_ERROR, new ErrorListener<>(mqttViewModel));
 
         mqttReceiver = new MQTTBroadcastReceiver();
         registerReceiver(mqttReceiver,
@@ -141,6 +143,10 @@ public class SettingsActivity extends AppCompatActivity {
             Log.d("Settings", "Topic:   " + mqttMsg.topic + "  Message: " + mqttMsg.message);
             if (mqttMsg.topic.equals(Constants.DC_ENGINE_FEED_KEY)) {
                 txtViewCurrentConvBeltSpeed.setText(mqttMsg.message);
+            }
+            if (mqttMsg.topic.equals(Constants.CREDENTIALS_ERROR)) {
+                Toast.makeText(this, "Invalid credentials, please try again", Toast.LENGTH_SHORT).show();
+                finish();
             }
         });
     }

@@ -42,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     public Button btnStartMain;
     public Button btnStopMain;
     public Button btnProcessLogMain;
+    public Button btnLogOut;
     public TextView txtViewSystemStatus;
     public String systemStatus;
     private MQTTBroadcastReceiver mqttReceiver;
@@ -53,12 +54,16 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
+        SharedPreferences prefsSession = getSharedPreferences("AdafruitPrefs", MODE_PRIVATE);
+        String username = prefsSession.getString("username", null);
+        String aioKey = prefsSession.getString("aioKey", null);
+
         sessionConfig();
 
         // Registrar receiver para recibir mensajes del servicio
         mqttReceiver = new MQTTBroadcastReceiver();
         IntentFilter filter = new IntentFilter();
-        filter.addAction(Constants.CREDENTIALS_ERROR);
+        filter.addAction("MQTT_MESSAGE_RECEIVED");
         registerReceiver(mqttReceiver,
                          filter,
                          Context.RECEIVER_EXPORTED);
@@ -93,6 +98,14 @@ public class MainActivity extends AppCompatActivity {
 
         btnStopMain.setOnClickListener(v -> {
             updateSysStatus(getString(R.string.info_sysstat_stop_main), Constants.UPDATE_SYSSTAT_SOURCE_MAIN);
+        });
+
+        btnLogOut = findViewById(R.id.btn_log_out_main);
+
+        btnLogOut.setOnClickListener(v -> {
+            // Intent para abrir Settings.java
+            closeSession();
+            sessionConfig();
         });
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -141,6 +154,9 @@ public class MainActivity extends AppCompatActivity {
             editor.putString("aioKey", aioKeySession);
             editor.apply();
 
+
+            Log.d("Main", "user " + usernameSession);
+            Log.d("Main", "aiok " + aioKeySession);
             // Iniciar el servicio MQTT
             // Intent serviceIntent = new Intent(this, MQTTService.class);
             // startService(serviceIntent);
@@ -172,6 +188,14 @@ public class MainActivity extends AppCompatActivity {
                 sessionConfig();
             }
         });
+    }
+
+    private void closeSession() {
+        SharedPreferences prefs = getSharedPreferences("AdafruitPrefs", Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.clear();
+        editor.apply();
+        Toast.makeText(this, "Session closed", Toast.LENGTH_SHORT).show();
     }
 
     private void updateSysStatus(String newSystemStatus, String source) {

@@ -79,6 +79,7 @@ public class MQTTService extends Service implements MQTTListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d("OnStartCommand", "try onStartCommand");
         if (intent != null) {
             username = intent.getStringExtra("username");
             AIOKey = intent.getStringExtra("aio_key");
