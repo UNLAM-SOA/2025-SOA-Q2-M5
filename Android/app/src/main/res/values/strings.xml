@@ -16,4 +16,5 @@
     <string name="hint_AIO_key">AIO key</string>
     <string name="connect_to_adafruit_io">Connect to Adafruit IO</string>
     <string name="connect">Connect</string>
+    <string name="log_out">Log out</string>
 </resources>
