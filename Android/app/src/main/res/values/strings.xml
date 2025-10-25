@@ -12,4 +12,8 @@
     <string name="info_sysstat_start_main">Running</string>
     <string name="info_sysstat_stop_main">Manually Stopped</string>
     <string name="info_sysstat_unexpected_error">Unexpected Error</string>
+    <string name="hint_user">Adafruit User</string>
+    <string name="hint_AIO_key">AIO key</string>
+    <string name="connect_to_adafruit_io">Connect to Adafruit IO</string>
+    <string name="connect">Connect</string>
 </resources>
