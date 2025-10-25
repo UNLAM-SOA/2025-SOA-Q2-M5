@@ -2,6 +2,7 @@ package observer.topicmanager;
 
 import android.util.Log;
 
+import mqtt.Constants;
 import observer.EventManager;
 
 public class TopicPublisher {
@@ -10,7 +11,8 @@ public class TopicPublisher {
                                                         "prodlineclassifier/feeds/distancesensor2",
                                                         "prodlineclassifier/feeds/servo",
                                                         "prodlineclassifier/feeds/dcengine",
-                                                        "prodlineclassifier/feeds/systemstatus");;
+                                                        "prodlineclassifier/feeds/systemstatus",
+                                                        Constants.CREDENTIALS_ERROR);
 
     public static void updateTopicRelatedComponents(String topic, String msg){
         Log.d("TopicPublisher", "NOTIFICO DESDE updateTopicRelatedComponents");

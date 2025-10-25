@@ -11,6 +11,8 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.lifecycle.ViewModelStoreOwner;
 
 import com.example.prodlineclassifier.R;
 import com.google.gson.Gson;
@@ -36,24 +38,19 @@ import java.io.IOException;
 
 public class MQTTService extends Service implements MQTTListener {
     private static final String TAG = "MqttService";
+    private String username;
+    private String AIOKey;
     private static MQTTManager mqttManager;
 
     public MQTTService() {
 
     }
+
     @Override
     public void onCreate() {
         super.onCreate();
         startForegroundServiceWithNotification();
         Log.d(TAG, "Servicio MQTT iniciado");
-        mqttManager = MQTTManager.getInstance();
-        Log.d(TAG, "ANTES DE CONEC");
-        // Conectarse a Adafruit IO
-        mqttManager.connect(getApplicationContext(),
-                Constants.ADAFRUIT_USERNAME,
-                Constants.ADAFRUIT_AIO_KEY,
-                this);
-        Log.d(TAG, "TERMINA ESTO");
     }
 
     private void startForegroundServiceWithNotification() {
@@ -75,47 +72,6 @@ public class MQTTService extends Service implements MQTTListener {
         Log.d(TAG, "ARRANCA FOREGROUND");
     }
 
-    public static void getLastFeedValue(String username, String feedKey, String aioKey, Callback callback) {
-        OkHttpClient client = new OkHttpClient();
-        String url = "https://io.adafruit.com/api/v2/" + username + "/feeds/" + feedKey + "/data/last";
-
-        Request request = new Request.Builder()
-                .url(url)
-                .addHeader("X-AIO-Key", aioKey)
-                .build();
-
-        client.newCall(request).enqueue(callback);
-    }
-
-    public static void getTopicLatestValue(String topic, MQTTViewModel mqttViewModel) {
-        MQTTService.getLastFeedValue(Constants.ADAFRUIT_USERNAME,
-                topic,
-                Constants.ADAFRUIT_AIO_KEY,
-                new Callback() {
-                    @Override
-                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                        Log.e("Adafruit", "Error: " + e.getMessage());
-                    }
-
-                    @Override
-                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                        if (response.isSuccessful()) {
-                            if(response.body() != null)
-                            {
-                                String lastValue;
-                                String body = response.body().string();
-                                Gson gson = new Gson();
-                                JsonObject jsonObject = gson.fromJson(body, JsonObject.class);
-                                lastValue = jsonObject.get("value").getAsString();
-                                Log.d("Adafruit", "Último valor de " + topic + ": " + lastValue);
-                                Log.d("Adafruit", "json " + body);
-                                mqttViewModel.postMessage(topic, lastValue);
-                            }
-                        }
-                    }
-                });
-    }
-
     public static void sendTopicMessageToAdafruit(String topic, String msg) {
         mqttManager.publish(topic, msg);
         Log.d("sendTopicMsgToAda", "[" + topic + "]" + " -> mensaje envidado: " + msg);
@@ -123,7 +79,21 @@ public class MQTTService extends Service implements MQTTListener {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "Servicio MQTT en ejecución");
+        if (intent != null) {
+            username = intent.getStringExtra("username");
+            AIOKey = intent.getStringExtra("aio_key");
+
+            Log.d(TAG, "Servicio MQTT iniciado con: " + username + " / " + AIOKey);
+
+            mqttManager = MQTTManager.getInstance();
+            mqttManager.connect(
+                    getApplicationContext(),
+                    username,
+                    AIOKey,
+                    this
+            );
+        }
+
         return START_STICKY; // Se reinicia si Android lo cierra
     }
 
@@ -148,8 +118,8 @@ public class MQTTService extends Service implements MQTTListener {
     @Override
     public void onConnected() {
         Log.d(TAG, "Conectado al broker MQTT");
-        mqttManager.subscribe(Constants.ADAFRUIT_USERNAME + "/feeds/" + Constants.SYSTEM_STATUS_FEED_KEY);
-        mqttManager.subscribe(Constants.ADAFRUIT_USERNAME + "/feeds/" + Constants.DC_ENGINE_FEED_KEY);
+        mqttManager.subscribe(username + "/feeds/" + Constants.SYSTEM_STATUS_FEED_KEY);
+        mqttManager.subscribe(username + "/feeds/" + Constants.DC_ENGINE_FEED_KEY);
     }
 
     @Override
@@ -160,6 +130,7 @@ public class MQTTService extends Service implements MQTTListener {
     @Override
     public void onConnectionError(Throwable exception) {
         Log.e(TAG, "Error al conectar: " + exception.getMessage());
+        TopicPublisher.updateTopicRelatedComponents(Constants.CREDENTIALS_ERROR, exception.getMessage());
     }
 
     @Override

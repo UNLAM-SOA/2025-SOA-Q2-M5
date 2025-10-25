@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#343A47"
+    android:padding="20dp"
+    android:gravity="center">
+
+    <TextView
+        android:id="@+id/txt_view_title_login"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:text="@string/connect_to_adafruit_io"
+        android:textColor="#F2ECECFF"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/edt_username_login"
+        android:layout_width="297dp"
+        android:layout_height="73dp"
+        android:autofillHints="@string/hint_user"
+        android:hint="@string/hint_user"
+        android:inputType="text"
+        android:textColor="#F2ECECFF"
+        android:textColorHint="#F2ECECFF" />
+
+    <EditText
+        android:id="@+id/edt_aiokey_login"
+        android:layout_width="292dp"
+        android:layout_height="78dp"
+        android:layout_marginTop="12dp"
+        android:autofillHints="@string/hint_AIO_key"
+        android:hint="@string/hint_AIO_key"
+        android:inputType="textPassword"
+        android:textColor="#F2ECECFF  "
+        android:textColorHint="#F2ECECFF  " />
+
+    <Button
+        android:id="@+id/btn_connect_login"
+        android:layout_width="233dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="#F2ECECFF"
+        android:gravity="center"
+        android:text="@string/connect"
+        android:textColor="#000000" />
+
+</LinearLayout>

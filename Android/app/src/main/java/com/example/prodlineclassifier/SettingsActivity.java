@@ -10,6 +10,7 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -28,6 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import mqtt.Constants;
 import mqtt.MQTTBroadcastReceiver;
+import mqtt.MQTTManager;
 import mqtt.MQTTService;
 import mqtt.viewmodel.MQTTViewModel;
 import observer.topicmanager.ConveyorBeltSpeedListener;
@@ -54,11 +56,20 @@ public class SettingsActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_settings);
 
+        SharedPreferences prefsSession = getSharedPreferences("AdafruitPrefs", MODE_PRIVATE);
+        String username = prefsSession.getString("username", null);
+        String aioKey = prefsSession.getString("aioKey", null);
+
+        if (username == null || aioKey == null) {
+            Toast.makeText(this, "Session expired", Toast.LENGTH_SHORT).show();
+            finish();
+        }
+
         Log.d("Settings", "INICIO Settings");
         mqttViewModel = new ViewModelProvider(this).get(MQTTViewModel.class);
         setViewModelResponses();
 
-        TopicPublisher.events.subscribe("prodlineclassifier/feeds/dcengine", new ConveyorBeltSpeedListener<>(mqttViewModel));
+        TopicPublisher.events.subscribe(username + "/feeds/dcengine", new ConveyorBeltSpeedListener<>(mqttViewModel));
 
         mqttReceiver = new MQTTBroadcastReceiver();
         registerReceiver(mqttReceiver,
@@ -115,7 +126,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         txtViewCurrentConvBeltSpeed.setText("N/A");
 
-        MQTTService.getTopicLatestValue(Constants.DC_ENGINE_FEED_KEY, mqttViewModel);
+        MQTTManager.getTopicLatestValue(username, aioKey, Constants.DC_ENGINE_FEED_KEY, mqttViewModel);
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());

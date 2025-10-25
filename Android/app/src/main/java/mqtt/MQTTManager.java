@@ -3,7 +3,19 @@ package mqtt;
 import android.content.Context;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
 import info.mqtt.android.service.MqttAndroidClient;
+import mqtt.viewmodel.MQTTViewModel;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.IMqttToken;
@@ -12,6 +24,8 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
+
+import java.io.IOException;
 
 public class MQTTManager {
     private static final String TAG = "MqttManager";
@@ -123,6 +137,49 @@ public class MQTTManager {
         } catch (Exception e) {
             Log.e(TAG, "Error al publicar: " + e.getMessage());
         }
+    }
+
+    public static void getLastFeedValue(String username, String feedKey, String aioKey, Callback callback) {
+        OkHttpClient client = new OkHttpClient();
+        String url = "https://io.adafruit.com/api/v2/" + username + "/feeds/" + feedKey + "/data/last";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("X-AIO-Key", aioKey)
+                .build();
+
+        client.newCall(request).enqueue(callback);
+    }
+
+    public static void getTopicLatestValue(String username, String aiokey, String topic, MQTTViewModel mqttViewModel) {
+        getLastFeedValue(username,
+                topic,
+                aiokey,
+                new Callback() {
+                    @Override
+                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                        Log.e("Adafruit", "Error: " + e.getMessage());
+                    }
+
+                    @Override
+                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                        if (response.isSuccessful()) {
+                            if(response.body() != null)
+                            {
+                                String lastValue;
+                                String body = response.body().string();
+                                Gson gson = new Gson();
+                                JsonObject jsonObject = gson.fromJson(body, JsonObject.class);
+                                lastValue = jsonObject.get("value").getAsString();
+                                Log.d("Adafruit", "Último valor de " + topic + ": " + lastValue);
+                                Log.d("Adafruit", "json " + body);
+                                if(topic != null && lastValue != null) {
+                                    mqttViewModel.postMessage(topic, lastValue);
+                                }
+                            }
+                        }
+                    }
+                });
     }
 
     public MqttAndroidClient getClient() {

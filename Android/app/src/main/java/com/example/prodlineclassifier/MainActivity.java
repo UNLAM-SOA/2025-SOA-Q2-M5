@@ -1,34 +1,38 @@
 package com.example.prodlineclassifier;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.example.prodlineclassifier.databinding.ActivityMainBinding;
-import com.example.prodlineclassifier.databinding.ActivitySettingsBinding;
+import java.util.concurrent.atomic.AtomicReference;
 
 import mqtt.Constants;
 import mqtt.MQTTBroadcastReceiver;
+import mqtt.MQTTManager;
 import mqtt.MQTTService;
 import mqtt.viewmodel.MQTTViewModel;
-import observer.topicmanager.ConveyorBeltSpeedListener;
+import observer.topicmanager.ErrorListener;
 import observer.topicmanager.SystemStatusListener;
 import observer.topicmanager.TopicPublisher;
 
@@ -49,20 +53,14 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        mqttViewModel = new ViewModelProvider(this).get(MQTTViewModel.class);
-        setViewModelResponses();
-
-        TopicPublisher.events.subscribe("prodlineclassifier/feeds/systemstatus", new SystemStatusListener<>(mqttViewModel));
-
-        // Iniciar el servicio MQTT
-        // Intent serviceIntent = new Intent(this, MQTTService.class);
-        // startService(serviceIntent);
-        startForegroundService(new Intent(this, MQTTService.class));
+        sessionConfig();
 
         // Registrar receiver para recibir mensajes del servicio
         mqttReceiver = new MQTTBroadcastReceiver();
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Constants.CREDENTIALS_ERROR);
         registerReceiver(mqttReceiver,
-                         new IntentFilter("MQTT_MESSAGE_RECEIVED"),
+                         filter,
                          Context.RECEIVER_EXPORTED);
 
         systemStatus = getString(R.string.txt_view_status);
@@ -97,12 +95,67 @@ public class MainActivity extends AppCompatActivity {
             updateSysStatus(getString(R.string.info_sysstat_stop_main), Constants.UPDATE_SYSSTAT_SOURCE_MAIN);
         });
 
-        MQTTService.getTopicLatestValue(Constants.SYSTEM_STATUS_FEED_KEY, mqttViewModel);
-
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
+        });
+    }
+
+    private void requestCredentials(CredentialsCallback callback) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View view = LayoutInflater.from(this).inflate(R.layout.dialog_adafruit_login, null);
+
+        EditText etUser = view.findViewById(R.id.edt_username_login);
+        EditText etKey = view.findViewById(R.id.edt_aiokey_login);
+        Button btnConnect = view.findViewById(R.id.btn_connect_login);
+
+        builder.setView(view);
+        builder.setCancelable(false); // no se puede cerrar sin ingresar datos
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
+
+        btnConnect.setOnClickListener(v -> {
+            String username = etUser.getText().toString().trim();
+            String AIOkey = etKey.getText().toString().trim();
+
+            if (username.isEmpty() || AIOkey.isEmpty()) {
+                Toast.makeText(this, "Please, fill all the credential fields", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            dialog.dismiss();
+            callback.onCredentialsRegistered(username, AIOkey);
+        });
+    }
+
+    interface CredentialsCallback {
+        void onCredentialsRegistered(String username, String AIOKey);
+    }
+
+    private void sessionConfig() {
+        requestCredentials((usernameSession, aioKeySession) -> {
+            SharedPreferences.Editor editor = getSharedPreferences("AdafruitPrefs", MODE_PRIVATE).edit();
+            editor.putString("username", usernameSession);
+            editor.putString("aioKey", aioKeySession);
+            editor.apply();
+
+            // Iniciar el servicio MQTT
+            // Intent serviceIntent = new Intent(this, MQTTService.class);
+            // startService(serviceIntent);
+            Intent serviceIntent = new Intent(this, MQTTService.class);
+            serviceIntent.putExtra("username", usernameSession);
+            serviceIntent.putExtra("aio_key", aioKeySession);
+            startForegroundService(serviceIntent);
+
+            mqttViewModel = new ViewModelProvider(this).get(MQTTViewModel.class);
+            setViewModelResponses();
+
+            TopicPublisher.events.subscribe(usernameSession + "/feeds/systemstatus", new SystemStatusListener<>(mqttViewModel));
+            TopicPublisher.events.subscribe(Constants.CREDENTIALS_ERROR, new ErrorListener<>(mqttViewModel));
+
+            MQTTManager.getTopicLatestValue(usernameSession, aioKeySession, Constants.SYSTEM_STATUS_FEED_KEY, mqttViewModel);
         });
     }
 
@@ -113,6 +166,10 @@ public class MainActivity extends AppCompatActivity {
             if (mqttMsg.topic.equals(Constants.SYSTEM_STATUS_FEED_KEY)) {
                 Log.d("Main", "Actualizo SysStat");
                 updateSysStatus(mqttMsg.message, Constants.UPDATE_SYSSTAT_SOURCE_ADAFRUIT);
+            }
+            if (mqttMsg.topic.equals(Constants.CREDENTIALS_ERROR)) {
+                Toast.makeText(this, "Invalid credentials, please try again", Toast.LENGTH_SHORT).show();
+                sessionConfig();
             }
         });
     }
