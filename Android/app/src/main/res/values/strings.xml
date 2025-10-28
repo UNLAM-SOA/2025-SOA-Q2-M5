@@ -8,6 +8,7 @@
     <string name="readable_btn_settings">Back to menu</string>
     <string name="color_sysstat_running">#08F26E</string>
     <string name="color_sysstat_manually_stopped">#FFFF00</string>
+    <string name="color_sysstat_emergency_stopped">#FF0000</string>
     <string name="color_sysstat_undefined">#D3D3D3</string>
     <string name="info_sysstat_start_main">Running</string>
     <string name="info_sysstat_stop_main">Manually Stopped</string>

@@ -131,7 +131,7 @@ public class MQTTService extends Service implements MQTTListener {
     @Override
     public void onConnectionError(Throwable exception) {
         Log.e(TAG, "Error al conectar: " + exception.getMessage());
-        TopicPublisher.updateTopicRelatedComponents(Constants.CREDENTIALS_ERROR, exception.getMessage());
+        TopicPublisher.notifyTopic(Constants.CREDENTIALS_ERROR, exception.getMessage());
     }
 
     @Override

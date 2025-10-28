@@ -44,4 +44,14 @@ public class EventManager {
             }
         }
     }
+
+    public void clearManager() {
+        listeners.clear();
+    }
+
+    public void addEvents(String... eventTypes) {
+        for (String eventType : eventTypes) {
+            this.listeners.put(eventType, new ArrayList<>());
+        }
+    }
 }

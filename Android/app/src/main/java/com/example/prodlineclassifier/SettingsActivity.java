@@ -40,7 +40,7 @@ import okhttp3.Callback;
 import okhttp3.Response;
 
 public class SettingsActivity extends AppCompatActivity {
-    MQTTViewModel mqttViewModel;
+    private MQTTViewModel mqttViewModel;
     public ImageButton btnBackSettings;
     public Button btnUpdateConvBeltSpeedSettings;
     public SeekBar seekBarConveyorBelt;
@@ -49,6 +49,8 @@ public class SettingsActivity extends AppCompatActivity {
     TextView txtViewCurrentConvBeltSpeed;
     TextView txtViewNewConvBeltSpeed;
     private MQTTBroadcastReceiver mqttReceiver;
+    private String username;
+    private String aioKey;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -58,20 +60,19 @@ public class SettingsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_settings);
 
         SharedPreferences prefsSession = getSharedPreferences("AdafruitPrefs", MODE_PRIVATE);
-        String username = prefsSession.getString("username", null);
-        String aioKey = prefsSession.getString("aioKey", null);
+        username = prefsSession.getString("username", null);
+        aioKey = prefsSession.getString("aioKey", null);
 
         if (username == null || aioKey == null) {
             Toast.makeText(this, "Session expired", Toast.LENGTH_SHORT).show();
             finish();
         }
 
-        Log.d("Settings", "INICIO Settings");
         mqttViewModel = new ViewModelProvider(this).get(MQTTViewModel.class);
         setViewModelResponses();
 
-        TopicPublisher.events.subscribe(username + "/feeds/dcengine", new ConveyorBeltSpeedListener<>(mqttViewModel));
-        TopicPublisher.events.subscribe(Constants.CREDENTIALS_ERROR, new ErrorListener<>(mqttViewModel));
+        TopicPublisher.subscribeTopic(username, Constants.DC_ENGINE_FEED_KEY, mqttViewModel);
+        TopicPublisher.subscribeTopic(username, Constants.CREDENTIALS_ERROR, mqttViewModel);
 
         mqttReceiver = new MQTTBroadcastReceiver();
         registerReceiver(mqttReceiver,
@@ -117,7 +118,7 @@ public class SettingsActivity extends AppCompatActivity {
         btnUpdateConvBeltSpeedSettings = findViewById(R.id.btn_update_conv_belt_speed_settings);
 
         btnUpdateConvBeltSpeedSettings.setOnClickListener(v -> {
-            MQTTService.sendTopicMessageToAdafruit("prodlineclassifier/feeds/dcengine", (String) txtViewNewConvBeltSpeed.getText());
+            MQTTService.sendTopicMessageToAdafruit(username + "/feeds/dcengine", (String) txtViewNewConvBeltSpeed.getText());
         });
 
         txtViewNewConvBeltSpeed = findViewById(R.id.txt_view_new_conv_belt_speed_settings);

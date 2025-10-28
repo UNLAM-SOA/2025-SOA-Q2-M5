@@ -26,7 +26,7 @@ public class MQTTBroadcastReceiver extends BroadcastReceiver {
             String message = intent.getStringExtra("message");
             Log.d("MqttBroadcastReceiver", "Mensaje recibido desde MQTTBroadcastReceiver: " + message + " del tópico: " + topic);
             // Acá se puede actualizar la UI o mostrar una notificación
-            TopicPublisher.updateTopicRelatedComponents(topic, message);
+            TopicPublisher.notifyTopic(topic, message);
         }
     }
 }
