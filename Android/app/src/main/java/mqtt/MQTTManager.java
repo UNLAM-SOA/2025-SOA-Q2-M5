@@ -6,12 +6,14 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import info.mqtt.android.service.MqttAndroidClient;
 import mqtt.viewmodel.MQTTViewModel;
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -24,8 +26,16 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonElement;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MQTTManager {
     private static final String TAG = "MqttManager";
@@ -139,6 +149,70 @@ public class MQTTManager {
         }
     }
 
+    public static void getTopicRecordCount(@NonNull String username, @NonNull String aioKey, @NonNull String feedKey, String condition, MQTTViewModel mqttViewModel) {
+        final int[] count = {0};
+        OkHttpClient client = new OkHttpClient();
+
+        // Construir URL con parámetros de filtrado
+        HttpUrl url = new HttpUrl.Builder()
+                .scheme("https")
+                .host("io.adafruit.com")
+                .addPathSegment("api")
+                .addPathSegment("v2")
+                .addPathSegment(username)
+                .addPathSegment("feeds")
+                .addPathSegment(feedKey)
+                .addPathSegment("data")
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("X-AIO-Key", aioKey)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("Adafruit", "Error: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    if(response.body() != null)
+                    {
+                        String body = response.body().string();
+                        try {
+                            JSONArray jsonArray = new JSONArray(body);
+                            System.out.println("Cantidad de registros obtenidos: " + jsonArray.length());
+                            if(!condition.isEmpty()) {
+                                JSONObject obj;
+                                String value;
+                                for(int i = 0; i < jsonArray.length(); i++) {
+                                    obj = jsonArray.getJSONObject(i);
+                                    value = obj.get("value").toString();
+                                    if (value.equalsIgnoreCase(condition)) {
+                                        count[0]++;
+                                    }
+                                }
+                                System.out.println("Cant elems para la condición: " + count[0]);
+                            }
+                            else {
+                                count[0] = jsonArray.length();
+                                System.out.println("Desde count: " + count[0]);
+                            }
+                            String mqttMsg = "{\"feed\":\""+feedKey+"\",\"filter\":\""+condition+"\",\"value\":\""+count[0]+"\"}";
+                            Log.e("mqqtMANAGER", "json mqttmsg: " + mqttMsg);
+                            mqttViewModel.postMessage(Constants.STATISTIC_REQ, mqttMsg);
+                        } catch (JSONException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     public static void getLastFeedValue(String username, String feedKey, String aioKey, Callback callback) {
         OkHttpClient client = new OkHttpClient();
         String url = "https://io.adafruit.com/api/v2/" + username + "/feeds/" + feedKey + "/data/last";
@@ -151,7 +225,7 @@ public class MQTTManager {
         client.newCall(request).enqueue(callback);
     }
 
-    public static void getTopicLatestValue(String username, String aiokey, String topic, MQTTViewModel mqttViewModel) {
+    public static void getTopicLatestValue(@NonNull String username, @NonNull String aiokey, String topic, MQTTViewModel mqttViewModel) {
         getLastFeedValue(username,
                 topic,
                 aiokey,
@@ -180,10 +254,6 @@ public class MQTTManager {
                         }
                     }
                 });
-    }
-
-    public MqttAndroidClient getClient() {
-        return client;
     }
 
     public void disconnect() {

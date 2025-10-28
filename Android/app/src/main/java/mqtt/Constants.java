@@ -7,6 +7,7 @@ public class Constants {
     public static final String SERVO_FEED_KEY = "servo";
     public static final String DC_ENGINE_FEED_KEY = "dcengine";
     public static final String SYSTEM_STATUS_FEED_KEY = "systemstatus";
+    public static final String STATISTIC_REQ = "stat_req";
     public static final String UPDATE_SYSSTAT_SOURCE_MAIN = "Main";
     public static final String UPDATE_SYSSTAT_SOURCE_ADAFRUIT = "Adafruit";
     public static final String CREDENTIALS_ERROR = "err_cred";

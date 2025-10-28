@@ -37,7 +37,7 @@ import observer.topicmanager.SystemStatusListener;
 import observer.topicmanager.TopicPublisher;
 
 public class MainActivity extends AppCompatActivity {
-    MQTTViewModel mqttViewModel;
+    private MQTTViewModel mqttViewModel;
     public Button btnSettingsMain;
     public Button btnStartMain;
     public Button btnStopMain;
@@ -46,6 +46,8 @@ public class MainActivity extends AppCompatActivity {
     public TextView txtViewSystemStatus;
     public String systemStatus;
     private MQTTBroadcastReceiver mqttReceiver;
+    String username = null;
+    String aioKey = null;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -54,9 +56,9 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        SharedPreferences prefsSession = getSharedPreferences("AdafruitPrefs", MODE_PRIVATE);
-        String username = prefsSession.getString("username", null);
-        String aioKey = prefsSession.getString("aioKey", null);
+        //SharedPreferences prefsSession = getSharedPreferences("AdafruitPrefs", MODE_PRIVATE);
+        //String username = prefsSession.getString("username", null);
+        //String aioKey = prefsSession.getString("aioKey", null);
 
         sessionConfig();
 
@@ -154,6 +156,8 @@ public class MainActivity extends AppCompatActivity {
             editor.putString("aioKey", aioKeySession);
             editor.apply();
 
+            username = usernameSession;
+            aioKey = aioKeySession;
 
             Log.d("Main", "user " + usernameSession);
             Log.d("Main", "aiok " + aioKeySession);
@@ -168,10 +172,12 @@ public class MainActivity extends AppCompatActivity {
             mqttViewModel = new ViewModelProvider(this).get(MQTTViewModel.class);
             setViewModelResponses();
 
-            TopicPublisher.events.subscribe(usernameSession + "/feeds/systemstatus", new SystemStatusListener<>(mqttViewModel));
-            TopicPublisher.events.subscribe(Constants.CREDENTIALS_ERROR, new ErrorListener<>(mqttViewModel));
-
             MQTTManager.getTopicLatestValue(usernameSession, aioKeySession, Constants.SYSTEM_STATUS_FEED_KEY, mqttViewModel);
+
+            TopicPublisher.setTopics(username);
+
+            TopicPublisher.subscribeTopic(username, Constants.SYSTEM_STATUS_FEED_KEY, mqttViewModel);
+            TopicPublisher.subscribeTopic(username, Constants.CREDENTIALS_ERROR, mqttViewModel);
         });
     }
 
@@ -206,7 +212,9 @@ public class MainActivity extends AppCompatActivity {
         switch (newSystemStatus) {
             case "Running":
                 if(systemStatus.equals("Running")) {
-                    Toast.makeText(this, "System is already running", Toast.LENGTH_SHORT).show();
+                    if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
+                        Toast.makeText(this, "System is already running", Toast.LENGTH_SHORT).show();
+                    }
                     return;
                 }
                 if(!systemStatus.equals("Manually Stopped")
@@ -219,19 +227,24 @@ public class MainActivity extends AppCompatActivity {
                 color = Color.parseColor(getString(R.string.color_sysstat_running));
                 if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
                 {
-                    MQTTService.sendTopicMessageToAdafruit("prodlineclassifier/feeds/systemstatus", newSystemStatus);
+                    MQTTService.sendTopicMessageToAdafruit(username + "/feeds/systemstatus", newSystemStatus);
                 }
                 break;
             case "Manually Stopped":
-                if(!systemStatus.equals("Running")) {
+                if(!systemStatus.equals("Running")
+                   && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
                     Toast.makeText(this, "System isn't running right now", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 color = Color.parseColor(getString(R.string.color_sysstat_manually_stopped));
                 if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
                 {
-                    MQTTService.sendTopicMessageToAdafruit("prodlineclassifier/feeds/systemstatus", newSystemStatus);
+                    MQTTService.sendTopicMessageToAdafruit( username + "/feeds/systemstatus", newSystemStatus);
                 }
+                break;
+            case "Emergency Stopped":
+                color = Color.parseColor(getString(R.string.color_sysstat_emergency_stopped));
+                txtViewSystemStatus.setTextColor(Color.parseColor("#FFFFFF"));
                 break;
             default:
                 color = Color.parseColor(getString(R.string.color_sysstat_undefined));
