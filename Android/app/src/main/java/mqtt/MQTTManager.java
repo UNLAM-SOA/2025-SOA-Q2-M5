@@ -33,8 +33,12 @@ import org.json.JSONObject;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonElement;
+import com.google.gson.reflect.TypeToken;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class MQTTManager {
@@ -206,6 +210,58 @@ public class MQTTManager {
                             mqttViewModel.postMessage(Constants.STATISTIC_REQ, mqttMsg);
                         } catch (JSONException e) {
                             throw new RuntimeException(e);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    public static void getTopicLastRecordJSON(@NonNull String username, @NonNull String aioKey, @NonNull String feedKey, @NonNull String condition, MQTTViewModel mqttViewModel) {
+        OkHttpClient client = new OkHttpClient();
+
+        // Construir URL con parámetros de filtrado
+        HttpUrl url = new HttpUrl.Builder()
+                .scheme("https")
+                .host("io.adafruit.com")
+                .addPathSegment("api")
+                .addPathSegment("v2")
+                .addPathSegment(username)
+                .addPathSegment("feeds")
+                .addPathSegment(feedKey)
+                .addPathSegment("data")
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("X-AIO-Key", aioKey)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e("Adafruit", "Error: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (response.isSuccessful()) {
+                    if(response.body() != null)
+                    {
+                        String body = response.body().string();
+                        JsonObject lastJSONData;
+                        Gson gson = new Gson();
+                        Type listType = new TypeToken<List<JsonObject>>() {}.getType();
+                        List<JsonObject> records = gson.fromJson(body, listType);
+                        ListIterator<JsonObject> it = records.listIterator(records.size());
+                        Log.e("mqqtMANAGER", "json list: " + records.size());
+                        while (it.hasPrevious()) {
+                            lastJSONData = it.previous();
+                            if(lastJSONData.get("value").getAsString().equals(condition)) {
+                                Log.e("mqqtMANAGER", "json mqttmsg: " + lastJSONData.toString());
+                                mqttViewModel.postMessage(Constants.STATISTIC_REQ, lastJSONData.toString());
+                                return;
+                            }
                         }
                     }
                 }
