@@ -45,6 +45,8 @@ public class ProcessLogActivity extends AppCompatActivity {
     private TextView txtValueManualStopped;
     private TextView txtValueRedProds;
     private TextView txtValueBlueProds;
+    private TextView txtValueUnknownProds;
+    private TextView txtValueLastEmergencyStoppedDate;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -85,6 +87,8 @@ public class ProcessLogActivity extends AppCompatActivity {
         txtValueManualStopped = findViewById(R.id.txt_value_manual_stops);
         txtValueBlueProds = findViewById(R.id.txt_value_amount_blue_prods);
         txtValueRedProds = findViewById(R.id.txt_value_amount_red_prods);
+        txtValueUnknownProds = findViewById(R.id.txt_value_amount_unknown_prods);
+        txtValueLastEmergencyStoppedDate = findViewById(R.id.txt_value_last_emergency_stop_date);
 
         getStatisticsValue();
 
@@ -104,16 +108,22 @@ public class ProcessLogActivity extends AppCompatActivity {
                 finish();
             }
             if (mqttMsg.topic.equals(Constants.STATISTIC_REQ)) {
-                String feed;
-                String filter;
                 String value;
                 Gson gson = new Gson();
                 JsonObject jsonObject = gson.fromJson(mqttMsg.message, JsonObject.class);
-                feed = jsonObject.get("feed").getAsString();
-                filter = jsonObject.get("filter").getAsString();
                 value = jsonObject.get("value").getAsString();
-                Log.d("Adafruit", "a getTopicRecordCount:  " + feed + " - " + filter + " - " + value);
-                CompletableFuture.runAsync(() -> updatesStatisticValue(feed, filter, value));
+                if (jsonObject.has("filter")) {
+                    String feed;
+                    String filter;
+                    feed = jsonObject.get("feed").getAsString();
+                    filter = jsonObject.get("filter").getAsString();
+                    Log.d("Adafruit", "a getTopicRecordCount:  " + feed + " - " + filter + " - " + value);
+                    CompletableFuture.runAsync(() -> updatesStatisticValue(feed, filter, value));
+                }
+                else {
+                    String date = jsonObject.get("created_at").getAsString(); // ISO 8601
+                    updateStatisticDate(value, date);
+                }
             }
         });
     }
@@ -123,6 +133,8 @@ public class ProcessLogActivity extends AppCompatActivity {
         MQTTManager.getTopicRecordCount(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Manually Stopped", mqttViewModel);
         MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Blue", mqttViewModel);
         MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Red", mqttViewModel);
+        MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Unknown", mqttViewModel);
+        MQTTManager.getTopicLastRecordJSON(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Emergency Stopped", mqttViewModel);
     }
 
     private void updatesStatisticValue(String feed, String filter, String value) {
@@ -132,23 +144,31 @@ public class ProcessLogActivity extends AppCompatActivity {
             case Constants.SYSTEM_STATUS_FEED_KEY:
                 switch (filter) {
                     case "Emergency Stopped":
-                        txtValueEmergencyStopped.setText(String.valueOf(value));
+                        txtValueEmergencyStopped.setText(value);
                         break;
                     case  "Manually Stopped":
-                        txtValueManualStopped.setText(String.valueOf(value));
+                        txtValueManualStopped.setText(value);
                         break;
                 }
                 break;
             case Constants.COLOR_SENSOR_FEED_KEY:
                 switch (filter) {
                     case "Blue":
-                        txtValueBlueProds.setText(String.valueOf(value));
+                        txtValueBlueProds.setText(value);
                         break;
                     case "Red":
-                        txtValueRedProds.setText(String.valueOf(value));
+                        txtValueRedProds.setText(value);
                         break;
+                    case "Unknown":
+                        txtValueUnknownProds.setText(value);
                 }
                 break;
+        }
+    }
+
+    private void updateStatisticDate(String statistic, String date) {
+        if(statistic.equals("Emergency Stopped")) {
+            txtValueLastEmergencyStoppedDate.setText(date);
         }
     }
 

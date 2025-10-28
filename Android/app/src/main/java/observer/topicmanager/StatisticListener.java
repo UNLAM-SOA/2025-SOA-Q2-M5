@@ -17,11 +17,11 @@ public class StatisticListener<String> implements EventListener<String> {
         viewModel = viewModelInstance;
     }
     @Override
-    public void update(java.lang.String eventType, String colorDetected) {
-        Log.d("SSL", "Recibido desde StatisticListener: " + eventType + ": " + colorDetected);
+    public void update(java.lang.String eventType, String statData) {
+        Log.d("SSL", "Recibido desde StatisticListener: " + eventType + ": " + statData);
         if(viewModel != null) {
             Log.d("SSL", "Posteo a ViewModel desde StatisticListener");
-            viewModel.postMessage(Constants.STATISTIC_REQ, (java.lang.String) colorDetected);
+            viewModel.postMessage(Constants.STATISTIC_REQ, (java.lang.String) statData);
         }
     }
 }
