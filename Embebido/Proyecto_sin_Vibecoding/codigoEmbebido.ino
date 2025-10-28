@@ -1,5 +1,7 @@
 #include <ESP32Servo.h>
 #include "Metrics.h"
+#include <WiFi.h>
+#include <PubSubClient.h> 
 
 // Habilita debug para la impresion por el puerto serial ...
 //----------------------------------------------
@@ -18,11 +20,11 @@
 #define DebugPrintState() \
   { \
     String str; \
-    str = "****************************"; \
+    str = "*****************************************"; \
     DebugPrint(str); \
     str = " CURRENT STATE -> [" + states_s[current_state] + "]"; \
     DebugPrint(str); \
-    str = "****************************"; \
+    str = "*****************************************"; \
     DebugPrint(str); \
   }
 
@@ -30,11 +32,11 @@
 #define DebugPrintEvent() \
   { \
     String str; \
-    str = "****************************"; \
+    str = "*****************************************"; \
     DebugPrint(str); \
     str = " EVENT DETECTED -> [" + events_s[current_event] + "]"; \
     DebugPrint(str); \
-    str = "****************************"; \
+    str = "*****************************************"; \
     DebugPrint(str); \
   }
 //----------------------------------------------
@@ -76,40 +78,55 @@
 #define DISTANCE_SENSORS            2
 #define MAX_TIME_TO_COLOR_SENSOR   5000   // ms -> 5 segundos
 #define MAX_TIME_TO_END            8000   // ms -> 8 segundos
-#define DISTANCE_THRESHOLD          5     //umbral de distancia
-
-#define SERVO_POS_COLOR1            5
-#define SERVO_POS_COLOR2            8
+#define DIST_THRESHOLD_ON           5     //umbral de distancia
+#define DIST_THRESHOLD_OFF          15
+#define SERVO_POS_COLOR1           35
+#define SERVO_POS_COLOR2           135
 #define MIN_PWM_SERVO_WIDTH        500
 #define MAX_PWM_SERVO_WIDTH        2500
 
 #define TIME_TO_OBJECT_0            0
 #define LED_TASK_PRIORITY           1
 #define LED_QUEUE_SIZE              1
-#define STACK_SIZE                1024
+#define STACK_SIZE_1024            1024
+#define STACK_SIZE_2048            2048
+#define STACK_SIZE_4096            4096
 
 #define BLINK_LED_DELAY_MS         200
-#define TASK_SENSOR_DELAY          200
+#define TASK_SENSOR_DELAY          100
 #define SENSORS_PRIORITY            1
 #define SENSORS_QUEUE_SIZE         10
-#define COLOR_THRESHOLD            200
-#define COLOR_DELAY                50
-#define COLOR_DOMINANCE_FACTOR     0.8
-
+#define COLOR_DIFF_FACTOR          0.25
+#define TASK_COLOR_SENSOR_DELAY    30  // EX 100
+#define STABILIZE_COLOR_DELAY      15 //EX 50
+#define COLOR_DOMINANCE_FACTOR     1.15
+#define COLOR_READ_TIMEOUT         50000UL
+#define RECONNECT_DELAY            5000
+#define DELAY_2000_MS              2000
+#define DELAY_500_MS               500
+#define DELAY_10_MS                10
+#define DELAY_100_MS               100
+#define COLOR_REPEATED_READ        2
+#define RMIN                       70
+#define RMAX                       935
+#define BMIN                       70
+#define BMAX                       800
+#define GMIN                       70
+#define GMAX                       960
 
 // --- Variables globales
 long t_start_moving   = 0;   // Marca de tiempo cuando comienza a moverse
 bool waiting_color    = false;
 bool waiting_end      = false;
 int engine_speed       = 150;
-unsigned long redBase = 0;
-unsigned long blueBase = 0;
-unsigned long greenBase = 0;
+int redBase = 0;
+int blueBase = 0;
+int greenBase = 0;
 bool color_sensor_calibrated = false;
 Servo Servo1;
+
 unsigned long initTime=0;   //Metrics
 unsigned long  actualTime=0; //Metrics
-
 
 //----------------------------------------------
 struct stDistanceSensor
@@ -129,6 +146,26 @@ enum DetectedColor {
   UNKNOWN
 };
 
+// ======== WiFi & MQTT ========
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+const char *ssid = "SO Avanzados";
+const char *password = "SOA.2025";
+
+const char *mqtt_server = "192.168.137.1";
+const int port = 1883;
+
+const char *user_name = "m5";
+const char *user_pass = "SOA.2025";
+const char *clientId = "m2wokwi";
+
+// TOPICOS MQTT
+const char *topic_conveyor_belt_cmd = "/conveyorBelt/cmd";
+const char *topic_conveyor_belt_state = "/conveyorBelt/state";
+
+
 
 
 // Functions---------------------------------------------
@@ -147,7 +184,7 @@ void none();
 ******************************************************/
 
 #define MAX_STATES                   5
-#define MAX_EVENTS                   9
+#define MAX_EVENTS                   11
 
 enum states          { ST_IDLE,
                        ST_MOVING,
@@ -169,7 +206,9 @@ enum events          {EV_OBJECT_DETECTED,
                       EV_RESTART_BUTTON,
                       EV_TIMEOUT,
                       EV_OBJECT_AT_END,
-                      EV_CONT } current_event;
+                      EV_CONT,
+                      EV_STOP_EXT,
+                      EV_RESTART_EXT } current_event;
 
 String events_s [] = {"EV_OBJECT_DETECTED",
                       "EV_COLOR1_DETECTED",
@@ -179,17 +218,19 @@ String events_s [] = {"EV_OBJECT_DETECTED",
                       "EV_RESTART_BUTTON",
                       "EV_TIMEOUT",
                       "EV_OBJECT_AT_END",
-                      "EV_CONT" };
+                      "EV_CONT",
+                      "EV_STOP_EXT",
+                      "EV_RESTART_EXT"};
 
 typedef void (*transition)();
 transition state_table[MAX_STATES][MAX_EVENTS] =
 {
-//EV_OBJECT_DETECTED  EV_COLOR1_DETECTED   EV_COLOR2_DETECTED   EV_COLOR_ERROR        EV_STOP_BUTTON       EV_RESTART_BUTTON   EV_TIMEOUT   EV_OBJECT_AT_END  EV_CONT
-{ start_moving       ,    none            ,    none            ,    none              ,    none            ,    none           , none       ,   none         , none  }, // ST_IDLE
-{ none               ,    move_to_color1  ,    move_to_color2  ,    error_stop        ,    manual_stop     ,    none           , error_stop ,   none         , none  }, // ST_MOVING
-{ none               ,    none            ,    none            ,    none              ,    none            ,    restart        , none       ,   none         , none  }, // ST_MANUAL_STOP
-{ none               ,    none            ,    none            ,    none              ,    none            ,    restart        , none       ,   none         , none  }, // ST_ERROR
-{ none               ,    none            ,    none            ,    none              ,    manual_stop     ,    none           , error_stop ,   finish       , none  }  // ST_COLOR_DETECTED
+//EV_OBJECT_DETECTED  EV_COLOR1_DETECTED   EV_COLOR2_DETECTED   EV_COLOR_ERROR        EV_STOP_BUTTON       EV_RESTART_BUTTON   EV_TIMEOUT   EV_OBJECT_AT_END  EV_CONT  EV_STOP_EXT     EV_RESTART_EXT
+{ start_moving       ,    none            ,    none            ,    none              ,    none            ,    none           , none       ,   none         , none    ,  none         ,    none    }, // ST_IDLE
+{ none               ,    move_to_color1  ,    move_to_color2  ,    error_stop        ,    manual_stop     ,    none           , error_stop ,   none         , none    ,  manual_stop  ,    none    }, // ST_MOVING
+{ none               ,    none            ,    none            ,    none              ,    none            ,    restart        , none       ,   none         , none    ,  none         ,   restart  }, // ST_MANUAL_STOP
+{ none               ,    none            ,    none            ,    none              ,    none            ,    restart        , none       ,   none         , none    ,  none         ,   restart  }, // ST_ERROR
+{ none               ,    none            ,    none            ,    none              ,    manual_stop     ,    none           , error_stop ,   finish       , none    ,  none         ,   none     }  // ST_COLOR_DETECTED
 };
 
 
@@ -249,31 +290,22 @@ void sensors_task(void *pv) {
       events ev = EV_OBJECT_DETECTED;
       xQueueSend(eventQueue, &ev, portMAX_DELAY);
     }
+    vTaskDelay(pdMS_TO_TICKS(DELAY_10_MS));
 
     // Distancia fin
     if (verifyObjectAtEnd()) {
       events ev = EV_OBJECT_AT_END;
       xQueueSend(eventQueue, &ev, portMAX_DELAY);
     }
+    vTaskDelay(pdMS_TO_TICKS(DELAY_10_MS));
 
     // Timeout
     if (verifySensorsTimeout()) {
       events ev = EV_TIMEOUT;
       xQueueSend(eventQueue, &ev, portMAX_DELAY);
     }
+    vTaskDelay(pdMS_TO_TICKS(DELAY_10_MS));
 
-    // Color
-    DetectedColor detected = NONE;
-    if (verifyColorSensor(detected)) {
-      events ev;
-      switch (detected) {
-        case RED:      ev = EV_COLOR1_DETECTED; break;
-        case BLUE:     ev = EV_COLOR2_DETECTED; break;
-        case UNKNOWN:  ev = EV_COLOR_ERROR;     break;
-        default:       return; // ignorar NONE
-      }
-      xQueueSend(eventQueue, &ev, portMAX_DELAY);
-    }
 
     // Restart button (polling con flanco)
     int currentRestart = digitalRead(PIN_RESTART_BUTTON);
@@ -287,6 +319,24 @@ void sensors_task(void *pv) {
   }
 }
 
+void color_task(void *pv) {
+// Color
+  while (true) {
+    DetectedColor detected = NONE;
+    if (verifyColorSensor(detected)) {
+      events ev;
+      switch (detected) {
+        case RED:      ev = EV_COLOR1_DETECTED; break;
+        case BLUE:     ev = EV_COLOR2_DETECTED; break;
+        case UNKNOWN:  ev = EV_COLOR_ERROR;     break;
+        default:       continue; // ignorar NONE
+      }
+      xQueueSend(eventQueue, &ev, portMAX_DELAY);
+    }
+    vTaskDelay(pdMS_TO_TICKS(TASK_COLOR_SENSOR_DELAY));
+  }
+}
+
 //---------------ISR BUtton STOP -------------------
 // IRAM_ATTR coloca la ISR en RAM para que se ejecute rápido y seguro
 void IRAM_ATTR stopButtonISR() {
@@ -296,6 +346,104 @@ void IRAM_ATTR stopButtonISR() {
   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 //------------------------------------------
+
+// -------- TASK: WIFI, MQTT y auxiliares-----------------
+void wifiTask(void *p)
+{
+  while (true)
+  {
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      wifiConnect();
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(RECONNECT_DELAY)); // revisa cada 5s
+  }
+}
+
+void wifiConnect()
+{
+  //DebugPrint("Intentando conectar WiFi...");
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(true);     // limpia estado anterior
+  WiFi.begin(ssid, password);
+  //DebugPrint(ssid);
+  //DebugPrint(password);
+  int intentos = 0;
+  const int MAX_INTENTOS = 20; // 20 x 500ms = 10s de espera
+
+  while (WiFi.status() != WL_CONNECTED && intentos < MAX_INTENTOS)
+  {
+    vTaskDelay(pdMS_TO_TICKS(DELAY_500_MS)); // wait 500ms
+    intentos++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    DebugPrint(" WIFI Conectado.");
+  } 
+}
+
+void mqtt_task(void *pv) {
+  while (true) {
+    if (WiFi.status() == WL_CONNECTED) {
+      if (!client.connected()) {
+        mqttReconnect(); // intenta una vez
+      } else {
+        client.loop();   // procesa mensajes
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(DELAY_100_MS)); // revisa cada 100ms
+  }
+}
+
+void mqttReconnect() {
+  static int intentos = 0;
+  const int MAX_INTENTOS = 5;
+
+  //DebugPrint("Intentando conexión MQTT...");
+
+  if (client.connect(clientId, user_name, user_pass)) {
+    DebugPrint("MQTT CONECTADO");
+    client.subscribe(topic_conveyor_belt_cmd);
+    intentos = 0;
+  } else {
+    intentos++;
+    if (intentos >= MAX_INTENTOS) {
+      vTaskDelay(pdMS_TO_TICKS(RECONNECT_DELAY));
+      intentos = 0;
+    } else {
+      vTaskDelay(pdMS_TO_TICKS(DELAY_2000_MS));
+    }
+  }
+}
+// ======== MQTT Callback ========
+// Función Callback que recibe los mensajes enviados por los dispositivos
+void callback(char* topic, byte* payload, unsigned int length) {
+  // Convertir directamente el payload en un String
+  String message((char*)payload, length);
+
+  DebugPrint("Mensaje recibido: " + message);
+
+  if (message == "STOP") {
+    events ev = EV_STOP_EXT;
+    xQueueSend(eventQueue, &ev, portMAX_DELAY);
+    return;
+  } 
+  else if (message == "RESET") {
+    events ev = EV_RESTART_EXT;
+    xQueueSend(eventQueue, &ev, portMAX_DELAY);
+    return;
+  }
+}
+
+
+void publish_state() {
+  if (client.connected()) {
+    String stateStr = states_s[current_state];
+    client.publish(topic_conveyor_belt_state, stateStr.c_str());
+  }
+}
+
 /****************************************************** 
                  END FREERTOS TASKS 
 ******************************************************/
@@ -345,8 +493,15 @@ void start(){
 
   xQueueLed = xQueueCreate(LED_QUEUE_SIZE, sizeof(LedCommand));
   eventQueue = xQueueCreate(SENSORS_QUEUE_SIZE, sizeof(events));
-  xTaskCreate(led_task, "led_task", STACK_SIZE, NULL, LED_TASK_PRIORITY, NULL);
-  xTaskCreate(sensors_task, "sensors_task", STACK_SIZE, NULL, SENSORS_PRIORITY, NULL);
+  xTaskCreate(led_task, "led_task", STACK_SIZE_1024, NULL, LED_TASK_PRIORITY, NULL);
+  xTaskCreate(sensors_task, "sensors_task", STACK_SIZE_2048, NULL, SENSORS_PRIORITY, NULL);
+  xTaskCreate(color_task, "color_task", STACK_SIZE_2048, NULL, SENSORS_PRIORITY, NULL);
+
+  xTaskCreate(mqtt_task, "MQTT", STACK_SIZE_4096, NULL, SENSORS_PRIORITY, NULL);
+  xTaskCreate(wifiTask, "WiFi", STACK_SIZE_4096, NULL, SENSORS_PRIORITY, NULL);
+
+  client.setServer(mqtt_server, port);
+  client.setCallback(callback);
 
   // ISR Stop button
   attachInterrupt(digitalPinToInterrupt(PIN_STOP_BUTTON), stopButtonISR, RISING);
@@ -367,6 +522,7 @@ void turn_on(){
   stop_engine();
   current_state = ST_IDLE;
   DebugPrintState();
+  publish_state();
 }
 
 void start_moving(){
@@ -381,6 +537,7 @@ void start_moving(){
 
   current_state = ST_MOVING;
   DebugPrintState();
+  publish_state();
 }
 
 void move_to_color1(){
@@ -389,6 +546,7 @@ void move_to_color1(){
   current_state = ST_COLOR_DETECTED;
   waiting_color = false;   // Flag color sensado
   DebugPrintState();
+  publish_state();
 }
 void move_to_color2(){
   DebugPrintEvent();  
@@ -396,6 +554,7 @@ void move_to_color2(){
   current_state = ST_COLOR_DETECTED;
   waiting_color = false;   // Flag color sensado
   DebugPrintState();
+  publish_state();
 }
 void error_stop(){
   DebugPrintEvent();  
@@ -404,6 +563,7 @@ void error_stop(){
   blink_red_led();
   current_state = ST_ERROR;
   DebugPrintState();
+  publish_state();
 }
 
 void manual_stop(){
@@ -413,6 +573,7 @@ void manual_stop(){
   turn_red_led_on();
   current_state = ST_MANUAL_STOP;
   DebugPrintState();
+  publish_state();
 }
 
 void restart(){
@@ -425,12 +586,11 @@ void restart(){
   waiting_end   = false;
   current_state = ST_IDLE;
   DebugPrintState();
+  publish_state();
 }
 
 void finish(){ 
-  
   restart();
-
 }
 
 
@@ -491,17 +651,17 @@ void stop_engine(){
 
 
 //COLOR SENSOR------------------------------------------------------
-unsigned long getRed() {
+int getRed() {
   // Rojo: S2=LOW, S3=LOW
   return readFrequency(LOW, LOW);
 }
 
-unsigned long getBlue() {
+int getBlue() {
     // Azul: S2=LOW, S3=HIGH
   return readFrequency(LOW, HIGH);
 }
   // Green: S2=HIGH, S3=HIGH
-unsigned long getGreen() {
+int getGreen() {
   return readFrequency(HIGH, HIGH);
 }
 
@@ -510,9 +670,14 @@ void calibrate_color_sensor(){
 	digitalWrite(PIN_COLOR_SENSOR_S0,HIGH);
 	digitalWrite(PIN_COLOR_SENSOR_S1,LOW);
 
-  redBase   = getRed();
-  blueBase  = getBlue();
-  greenBase = getGreen();
+  int redTmp = getRed();
+  redBase   = map(redTmp, RMIN, RMAX, 255, 0); 
+  
+  int blueTmp = getBlue();
+  blueBase  = map(blueTmp, BMIN, BMAX, 255, 0);
+
+  int greenTmp = getGreen();
+  greenBase = map(greenTmp, GMIN, GMAX, 255, 0);
   color_sensor_calibrated = true;
   /*
   Serial.println("Calibracion completada:");
@@ -522,65 +687,78 @@ void calibrate_color_sensor(){
   */
 }
 
-unsigned long readFrequency(bool s2, bool s3) {
+int readFrequency(bool s2, bool s3) {
   
   digitalWrite(PIN_COLOR_SENSOR_S2, s2);
   digitalWrite(PIN_COLOR_SENSOR_S3, s3);
   
-  return pulseIn(PIN_COLOR_SENSOR_OUT, LOW);
+  return pulseIn(PIN_COLOR_SENSOR_OUT, LOW, COLOR_READ_TIMEOUT);
 }
 
 DetectedColor readColorSensor() {
   if (!color_sensor_calibrated) 
     return NONE;
 
-  unsigned long red = getRed();
-  vTaskDelay(pdMS_TO_TICKS(COLOR_DELAY));
+  // --- Lectura y normalización ---
+  int Red = getRed();
+  int redValue = map(Red, RMIN, RMAX, 255, 0);   // Normaliza a 0–255
+  vTaskDelay(pdMS_TO_TICKS(STABILIZE_COLOR_DELAY));
 
-  unsigned long blue = getBlue();
-  vTaskDelay(pdMS_TO_TICKS(COLOR_DELAY));
+  int Green = getGreen();
+  int greenValue = map(Green, GMIN, GMAX, 255, 0);
+  vTaskDelay(pdMS_TO_TICKS(STABILIZE_COLOR_DELAY));
 
-  unsigned long green = getGreen();
-  vTaskDelay(pdMS_TO_TICKS(COLOR_DELAY));
+  int Blue = getBlue();
+  int blueValue = map(Blue, BMIN, BMAX, 255, 0);
+  vTaskDelay(pdMS_TO_TICKS(STABILIZE_COLOR_DELAY));
 
-  // No hay objeto, valores similares a la base
-  if (abs((long)red - (long)redBase) < COLOR_THRESHOLD &&
-      abs((long)blue - (long)blueBase) < COLOR_THRESHOLD &&
-      abs((long)green - (long)greenBase) < COLOR_THRESHOLD) {
+  /*
+  Serial.printf("R: %d | RB: %d\n", redValue, redBase);
+  Serial.printf("G: %d | GBase: %d\n", greenValue, greenBase);
+  Serial.printf("B: %d | BBase: %d\n", blueValue, blueBase);
+  */
+  // --- Detección de ausencia de objeto ---
+  if (abs(redValue - redBase)   < redBase   * COLOR_DIFF_FACTOR &&
+      abs(blueValue - blueBase) < blueBase  * COLOR_DIFF_FACTOR &&
+      abs(greenValue - greenBase) < greenBase * COLOR_DIFF_FACTOR) {
     return NONE;
   }
-  /*
-  Serial.print("RED  y base: ");   Serial.print(red); Serial.println(redBase);
-  Serial.print("BLUE y base: ");  Serial.print(blue); Serial.println(blueBase);
-  Serial.print("GREEN y base: "); Serial.print(green); Serial.println(greenBase);
-  */
 
-  // HAY OBJETO - determinar de qué color es
-  if (red < blue * COLOR_DOMINANCE_FACTOR && red < green * COLOR_DOMINANCE_FACTOR)
+  // --- Determinación de color dominante ---
+  if (redValue > blueValue * COLOR_DOMINANCE_FACTOR && redValue > greenValue * COLOR_DOMINANCE_FACTOR)
     return RED;
 
-if (blue < red * COLOR_DOMINANCE_FACTOR && blue < green * COLOR_DOMINANCE_FACTOR)
+  if (blueValue > redValue * COLOR_DOMINANCE_FACTOR && blueValue > greenValue * COLOR_DOMINANCE_FACTOR)
     return BLUE;
 
-  // Objeto presente pero no es rojo ni azul
+  // --- Objeto presente pero color indefinido ---
   return UNKNOWN;
-  
 }
 
 bool verifyColorSensor(DetectedColor &detected) {
-  static bool colorAlreadyReported = false;
+  static bool colorAlreadyReported = false; // Evita repetir detección
+  static DetectedColor lastStableColor = NONE; // Último color leído
+  static int sameCount = 0; // Contador de lecturas consecutivas iguales
+  
   DetectedColor current = readColorSensor();
-  //DebugPrint(current); //imprime color detectado para debug
-  if ((current == RED || current == BLUE || current == UNKNOWN) && !colorAlreadyReported) {
+  //DebugPrint(current);
+  if (current == lastStableColor && current != NONE)
+    sameCount++; // Incrementa si se repite el mismo color
+  else
+    sameCount = 0;  // Reinicia si el color cambió
+
+  lastStableColor = current;
+
+  if (sameCount >= COLOR_REPEATED_READ && !colorAlreadyReported) {  // Confirmado COLOR_REPEATED_READ veces seguidas
     detected = current;
-    colorAlreadyReported = true;   // No repetir hasta que salga
+    colorAlreadyReported = true;
     return true;
   }
-  
+
   if (current == NONE) {
-    colorAlreadyReported = false;  // Reset cuando ya no hay objeto
+    colorAlreadyReported = false;
   }
-  
+
   return false;
 }
 
@@ -610,37 +788,41 @@ int readDistanceSensor(stDistanceSensor distance_sensor)
   return calcDistance(time_to_object);
 }
 
-bool verifyObjectAtStart(){ 
-  distanceSensors[DISTANCE_SENSOR1].current_value=readDistanceSensor(distanceSensors[DISTANCE_SENSOR1]);
+bool verifyObjectAtStart(){  
+    distanceSensors[DISTANCE_SENSOR1].current_value = readDistanceSensor(distanceSensors[DISTANCE_SENSOR1]);
+    //DebugPrint(distanceSensors[DISTANCE_SENSOR1].current_value);
+    int current_value = distanceSensors[DISTANCE_SENSOR1].current_value;
+    static bool objectDetected = false;
 
-  int current_value = distanceSensors[DISTANCE_SENSOR1].current_value;
-  int prev_value = distanceSensors[DISTANCE_SENSOR1].prev_value;
-  if(current_value != prev_value){
-    distanceSensors[DISTANCE_SENSOR1].prev_value = current_value;
-    if(current_value <= DISTANCE_THRESHOLD){
-
-      return true;
+    if(!objectDetected && current_value > 0 && current_value <= DIST_THRESHOLD_ON){
+        objectDetected = true;
+        return true;
     }
-  }
+    else if(objectDetected && (current_value == 0 || current_value > DIST_THRESHOLD_OFF)){
+        objectDetected = false;
+    }
 
-  return false;
+    return false;
 }
 
 
 bool verifyObjectAtEnd(){  
-  distanceSensors[DISTANCE_SENSOR2].current_value=readDistanceSensor(distanceSensors[DISTANCE_SENSOR2]);
-  
-  int current_value = distanceSensors[DISTANCE_SENSOR2].current_value;
-  int prev_value = distanceSensors[DISTANCE_SENSOR2].prev_value;
-  
-  if(current_value != prev_value){
-    distanceSensors[DISTANCE_SENSOR2].prev_value = current_value;
-    if(current_value <= DISTANCE_THRESHOLD){
-      return true;
-    }
-  }
+    distanceSensors[DISTANCE_SENSOR2].current_value = readDistanceSensor(distanceSensors[DISTANCE_SENSOR2]);
+    //DebugPrint(distanceSensors[DISTANCE_SENSOR2].current_value);
 
-  return false;
+    int current_value = distanceSensors[DISTANCE_SENSOR2].current_value;
+    static bool objectDetected = false;
+
+    // Solo disparar cuando el objeto aparece bajo el umbral
+    if(!objectDetected && current_value > 0 && current_value <= DIST_THRESHOLD_ON){
+        objectDetected = true;
+        return true;
+    }
+    else if(objectDetected && (current_value == 0 || current_value > DIST_THRESHOLD_OFF)){
+        objectDetected = false;
+    }
+
+    return false;
 }
 
 int calcDistance(int time_to_object) 
@@ -684,6 +866,8 @@ void get_new_event( )
   //se bloquea en espera de un nuevo evento
   if( xQueueReceive(eventQueue, &new_event, portMAX_DELAY) == pdPASS )
   {
+    //Serial.print("DEBUG: Evento recibido de la cola -> ");
+    //Serial.println(events_s[new_event]);
      if (new_event != current_event) {
       current_event = new_event;
     }  
