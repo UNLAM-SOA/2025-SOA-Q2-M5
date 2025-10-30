@@ -47,6 +47,7 @@ public class ProcessLogActivity extends AppCompatActivity {
     private TextView txtValueBlueProds;
     private TextView txtValueUnknownProds;
     private TextView txtValueLastEmergencyStoppedDate;
+    private TextView txtValueLastManualStoppedDate;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -89,6 +90,7 @@ public class ProcessLogActivity extends AppCompatActivity {
         txtValueRedProds = findViewById(R.id.txt_value_amount_red_prods);
         txtValueUnknownProds = findViewById(R.id.txt_value_amount_unknown_prods);
         txtValueLastEmergencyStoppedDate = findViewById(R.id.txt_value_last_emergency_stop_date);
+        txtValueLastManualStoppedDate = findViewById(R.id.txt_value_last_manual_stop_date);
 
         getStatisticsValue();
 
@@ -118,11 +120,11 @@ public class ProcessLogActivity extends AppCompatActivity {
                     feed = jsonObject.get("feed").getAsString();
                     filter = jsonObject.get("filter").getAsString();
                     Log.d("Adafruit", "a getTopicRecordCount:  " + feed + " - " + filter + " - " + value);
-                    CompletableFuture.runAsync(() -> updatesStatisticValue(feed, filter, value));
+                    CompletableFuture.runAsync(() -> updateStatisticValue(feed, filter, value));
                 }
                 else {
                     String date = jsonObject.get("created_at").getAsString(); // ISO 8601
-                    updateStatisticDate(value, date);
+                    CompletableFuture.runAsync(() -> updateStatisticDate(value, date));
                 }
             }
         });
@@ -135,9 +137,10 @@ public class ProcessLogActivity extends AppCompatActivity {
         MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Red", mqttViewModel);
         MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Unknown", mqttViewModel);
         MQTTManager.getTopicLastRecordJSON(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Emergency Stopped", mqttViewModel);
+        MQTTManager.getTopicLastRecordJSON(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Manually Stopped", mqttViewModel);
     }
 
-    private void updatesStatisticValue(String feed, String filter, String value) {
+    private void updateStatisticValue(String feed, String filter, String value) {
 
         Log.d("ProcessLogActivity", "feed value:   " + value);
         switch (feed) {
@@ -167,9 +170,15 @@ public class ProcessLogActivity extends AppCompatActivity {
     }
 
     private void updateStatisticDate(String statistic, String date) {
-        if(statistic.equals("Emergency Stopped")) {
-            txtValueLastEmergencyStoppedDate.setText(date);
+        switch (statistic) {
+            case "Emergency Stopped":
+                txtValueLastEmergencyStoppedDate.setText(date);
+                break;
+            case "Manually Stopped":
+                txtValueLastManualStoppedDate.setText(date);
+                break;
         }
+
     }
 
     @Override
