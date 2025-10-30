@@ -229,6 +229,7 @@ public class MainActivity extends AppCompatActivity {
                 {
                     MQTTService.sendTopicMessageToAdafruit(username + "/feeds/systemstatus", newSystemStatus);
                 }
+                txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
             case "Manually Stopped":
                 if(!systemStatus.equals("Running")
@@ -241,6 +242,7 @@ public class MainActivity extends AppCompatActivity {
                 {
                     MQTTService.sendTopicMessageToAdafruit( username + "/feeds/systemstatus", newSystemStatus);
                 }
+                txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
             case "Emergency Stopped":
                 color = Color.parseColor(getString(R.string.color_sysstat_emergency_stopped));
