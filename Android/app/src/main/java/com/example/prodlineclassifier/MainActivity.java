@@ -6,6 +6,10 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -36,7 +40,7 @@ import observer.topicmanager.ErrorListener;
 import observer.topicmanager.SystemStatusListener;
 import observer.topicmanager.TopicPublisher;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
     private MQTTViewModel mqttViewModel;
     public Button btnSettingsMain;
     public Button btnStartMain;
@@ -48,6 +52,15 @@ public class MainActivity extends AppCompatActivity {
     private MQTTBroadcastReceiver mqttReceiver;
     String username = null;
     String aioKey = null;
+    // Variables para el Sensor
+    private SensorManager mSensorManager;
+    private Sensor mAccelerometer;
+    // Constantes y variables para la detección de shake
+    private static final float SHAKE_THRESHOLD_GRAVITY = 8.0F; // Umbral de detección (ajustable)
+    private static final int SHAKE_SLOP_TIME_MS = 500; // Tiempo mínimo entre detecciones
+    private static final int SHAKE_COUNT_RESET_TIME_MS = 3000; // Tiempo para resetear el contador de sacudidas
+    private long mShakeTimestamp; // Marca de tiempo del último evento
+    private int mShakeCount; // Contador de sacudidas
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -109,6 +122,10 @@ public class MainActivity extends AppCompatActivity {
             closeSession();
             sessionConfig();
         });
+
+        // Inicializar el SensorManager y el Acelerómetro
+        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        mAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -210,29 +227,36 @@ public class MainActivity extends AppCompatActivity {
         int color;
 
         switch (newSystemStatus) {
-            case "Running":
-                if(systemStatus.equals("Running")) {
-                    if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
-                        Toast.makeText(this, "System is already running", Toast.LENGTH_SHORT).show();
-                    }
+            case "ST_IDLE":
+                if(!systemStatus.equals("ST_MANUAL_STOP")
+                    && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
+
+                    Toast.makeText(this, "System is already running", Toast.LENGTH_SHORT).show();
+
                     return;
                 }
-                if(!systemStatus.equals("Manually Stopped")
+                /*
+                if(!systemStatus.equals("ST_MANUAL_STOP")
                     && !systemStatus.equals("Emergency Stopped")
                     && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
                 {
                     Toast.makeText(this, "System is offline", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                color = Color.parseColor(getString(R.string.color_sysstat_running));
+                */
+                color = Color.parseColor(getString(R.string.color_sysstat_idle));
                 if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
                 {
                     MQTTService.sendTopicMessageToAdafruit(username + "/feeds/systemstatus", newSystemStatus);
                 }
                 txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
-            case "Manually Stopped":
-                if(!systemStatus.equals("Running")
+            case "ST_COLOR_DETECTED":
+                color = Color.parseColor(getString(R.string.color_sysstat_running));
+                txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
+                break;
+            case "ST_MANUAL_STOP":
+                if(systemStatus.equals("ST_MANUAL_STOP")
                    && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
                     Toast.makeText(this, "System isn't running right now", Toast.LENGTH_SHORT).show();
                     return;
@@ -244,18 +268,78 @@ public class MainActivity extends AppCompatActivity {
                 }
                 txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
-            case "Emergency Stopped":
+            case "ST_ERROR":
                 color = Color.parseColor(getString(R.string.color_sysstat_emergency_stopped));
                 txtViewSystemStatus.setTextColor(Color.parseColor("#FFFFFF"));
                 break;
             default:
                 color = Color.parseColor(getString(R.string.color_sysstat_undefined));
+                txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
         }
 
         txtViewSystemStatus.setText(newSystemStatus);
         systemStatus = newSystemStatus;
         bgDrawable.setColor(color);
+    }
+
+    /**
+     * Método a ejecutar cuando se detecta una sacudida.
+     * @param count El número de sacudidas detectadas en la ráfaga actual.
+     */
+    private void handleShakeEvent(int count) {
+        // Para que solo se ejecute una vez por ráfaga, si count == 1
+        if(count == 1)
+        {
+            String message = "Restarting the system...";
+            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show();
+            updateSysStatus(getString(R.string.info_sysstat_start_main), Constants.UPDATE_SYSSTAT_SOURCE_MAIN);
+        }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (mAccelerometer != null) {
+            float x = event.values[0];
+            float y = event.values[1];
+            float z = event.values[2];
+
+            // Calcular la fuerza de la aceleración (usando la norma vectorial)
+            float gForce = (float) Math.sqrt(x * x + y * y + z * z) - SensorManager.GRAVITY_EARTH;
+
+            if (gForce > SHAKE_THRESHOLD_GRAVITY) {
+                final long now = System.currentTimeMillis();
+
+                // Ignorar sacudidas muy cercanas en el tiempo
+                if (mShakeTimestamp + SHAKE_SLOP_TIME_MS > now) {
+                    return;
+                }
+
+                // Resetear el contador si ha pasado mucho tiempo desde la última sacudida
+                if (mShakeTimestamp + SHAKE_COUNT_RESET_TIME_MS < now) {
+                    mShakeCount = 0;
+                }
+
+                mShakeTimestamp = now;
+                mShakeCount++;
+
+                handleShakeEvent(mShakeCount);
+            }
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // No es necesario implementar lógica para la detección de shakes
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Registrar el listener cuando la actividad está visible
+        if (mAccelerometer != null) {
+            mSensorManager.registerListener(this, mAccelerometer, SensorManager.SENSOR_DELAY_UI);
+        }
     }
 
     @Override
@@ -271,11 +355,19 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onPause() {
         super.onPause();
+
+        // Desregistrar el listener para ahorrar batería cuando la actividad no está en primer plano
+        if (mAccelerometer != null) {
+            mSensorManager.unregisterListener(this);
+        }
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         unregisterReceiver(mqttReceiver);
+        if (mSensorManager != null) {
+            mSensorManager.unregisterListener(this);
+        }
     }
 }
