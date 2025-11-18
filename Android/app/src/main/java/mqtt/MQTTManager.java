@@ -257,7 +257,7 @@ public class MQTTManager {
                         Log.e("mqqtMANAGER", "json list: " + records.size());
                         while (it.hasPrevious()) {
                             lastJSONData = it.previous();
-                            if(lastJSONData.get("value").getAsString().equals(condition)) {
+                            if(lastJSONData.get("value").getAsString().equalsIgnoreCase(condition)) {
                                 Log.e("mqqtMANAGER", "json mqttmsg: " + lastJSONData.toString());
                                 mqttViewModel.postMessage(Constants.STATISTIC_REQ, lastJSONData.toString());
                                 return;

@@ -84,12 +84,12 @@ public class ProcessLogActivity extends AppCompatActivity {
             finish(); // Cierra la Activity y vuelve al Main
         });
 
-        txtValueEmergencyStopped = findViewById(R.id.txt_value_emergency_stops);
+        //txtValueEmergencyStopped = findViewById(R.id.txt_value_emergency_stops);
         txtValueManualStopped = findViewById(R.id.txt_value_manual_stops);
         txtValueBlueProds = findViewById(R.id.txt_value_amount_blue_prods);
         txtValueRedProds = findViewById(R.id.txt_value_amount_red_prods);
         txtValueUnknownProds = findViewById(R.id.txt_value_amount_unknown_prods);
-        txtValueLastEmergencyStoppedDate = findViewById(R.id.txt_value_last_emergency_stop_date);
+        //txtValueLastEmergencyStoppedDate = findViewById(R.id.txt_value_last_emergency_stop_date);
         txtValueLastManualStoppedDate = findViewById(R.id.txt_value_last_manual_stop_date);
 
         getStatisticsValue();
@@ -131,13 +131,13 @@ public class ProcessLogActivity extends AppCompatActivity {
     }
 
     private void getStatisticsValue() {
-        MQTTManager.getTopicRecordCount(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Emergency Stopped", mqttViewModel);
-        MQTTManager.getTopicRecordCount(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Manually Stopped", mqttViewModel);
-        MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Blue", mqttViewModel);
-        MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Red", mqttViewModel);
-        MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "Unknown", mqttViewModel);
-        MQTTManager.getTopicLastRecordJSON(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Emergency Stopped", mqttViewModel);
-        MQTTManager.getTopicLastRecordJSON(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Manually Stopped", mqttViewModel);
+        //MQTTManager.getTopicRecordCount(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Emergency Stopped", mqttViewModel);
+        MQTTManager.getTopicRecordCount(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "ST_MANUAL_STOP", mqttViewModel);
+        MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "BLUE", mqttViewModel);
+        MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "RED", mqttViewModel);
+        MQTTManager.getTopicRecordCount(username, aioKey, Constants.COLOR_SENSOR_FEED_KEY, "UNKNOWN", mqttViewModel);
+        //MQTTManager.getTopicLastRecordJSON(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "Emergency Stopped", mqttViewModel);
+        MQTTManager.getTopicLastRecordJSON(username, aioKey, Constants.SYSTEM_STATUS_FEED_KEY, "ST_MANUAL_STOP", mqttViewModel);
     }
 
     private void updateStatisticValue(String feed, String filter, String value) {
@@ -149,20 +149,20 @@ public class ProcessLogActivity extends AppCompatActivity {
                     case "Emergency Stopped":
                         txtValueEmergencyStopped.setText(value);
                         break;
-                    case  "Manually Stopped":
+                    case  "ST_MANUAL_STOP":
                         txtValueManualStopped.setText(value);
                         break;
                 }
                 break;
             case Constants.COLOR_SENSOR_FEED_KEY:
                 switch (filter) {
-                    case "Blue":
+                    case "BLUE":
                         txtValueBlueProds.setText(value);
                         break;
-                    case "Red":
+                    case "RED":
                         txtValueRedProds.setText(value);
                         break;
-                    case "Unknown":
+                    case "UNKNOWN":
                         txtValueUnknownProds.setText(value);
                 }
                 break;
@@ -174,7 +174,7 @@ public class ProcessLogActivity extends AppCompatActivity {
             case "Emergency Stopped":
                 txtValueLastEmergencyStoppedDate.setText(date);
                 break;
-            case "Manually Stopped":
+            case "ST_MANUAL_STOP":
                 txtValueLastManualStoppedDate.setText(date);
                 break;
         }
