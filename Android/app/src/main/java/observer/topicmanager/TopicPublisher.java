@@ -32,11 +32,16 @@ public class TopicPublisher {
        String topic = username + "/feeds/" + key;
         switch (key) {
             case Constants.DISTANCE_SENSOR_1_FEED_KEY:
+                events.subscribe(topic, new DistanceSensor1Listener<>(mqttViewModel));
+                break;
             case Constants.COLOR_SENSOR_FEED_KEY:
                 events.subscribe(topic, new ProductColorListener<>(mqttViewModel));
                 break;
             case Constants.DISTANCE_SENSOR_2_FEED_KEY:
+                events.subscribe(topic, new DistanceSensor2Listener<>(mqttViewModel));
+                break;
             case Constants.SERVO_FEED_KEY:
+                events.subscribe(topic, new ServoListener<>(mqttViewModel));
                 break;
             case Constants.DC_ENGINE_FEED_KEY:
                 events.subscribe(topic, new ConveyorBeltSpeedListener<>(mqttViewModel));

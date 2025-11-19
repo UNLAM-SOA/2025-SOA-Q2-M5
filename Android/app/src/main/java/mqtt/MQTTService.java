@@ -121,6 +121,10 @@ public class MQTTService extends Service implements MQTTListener {
         Log.d(TAG, "Conectado al broker MQTT");
         mqttManager.subscribe(username + "/feeds/" + Constants.SYSTEM_STATUS_FEED_KEY);
         mqttManager.subscribe(username + "/feeds/" + Constants.DC_ENGINE_FEED_KEY);
+        mqttManager.subscribe(username + "/feeds/" + Constants.DISTANCE_SENSOR_1_FEED_KEY);
+        mqttManager.subscribe(username + "/feeds/" + Constants.COLOR_SENSOR_FEED_KEY);
+        mqttManager.subscribe(username + "/feeds/" + Constants.DISTANCE_SENSOR_2_FEED_KEY);
+        mqttManager.subscribe(username + "/feeds/" + Constants.SERVO_FEED_KEY);
     }
 
     @Override

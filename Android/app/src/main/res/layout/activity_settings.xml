@@ -105,7 +105,7 @@
         app:layout_constraintVertical_bias="0.837" />
 
     <TextView
-        android:id="@+id/textView28"
+        android:id="@+id/txt_view_servo_value_settings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="N/A"
@@ -118,7 +118,7 @@
         app:layout_constraintVertical_bias="0.889" />
 
     <TextView
-        android:id="@+id/textView22"
+        android:id="@+id/txt_view_color_sensor_value_settings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="N/A"
@@ -131,7 +131,7 @@
         app:layout_constraintVertical_bias="0.639" />
 
     <TextView
-        android:id="@+id/textView19"
+        android:id="@+id/txt_view_distance_sensor_1_value_settings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="N/A"
@@ -197,7 +197,7 @@
         app:layout_constraintVertical_bias="0.889" />
 
     <TextView
-        android:id="@+id/textView25"
+        android:id="@+id/txt_view_distance_sensor_2_value_settings"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="N/A"

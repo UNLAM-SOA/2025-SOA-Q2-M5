@@ -46,8 +46,12 @@ public class SettingsActivity extends AppCompatActivity {
     public SeekBar seekBarConveyorBelt;
     private static final String PREFS_CONV_BELT = "ConvBeltPrefs";
     private static final String KEY_SEEKBAR_CONV_BELT = "seekBarValue";
-    TextView txtViewCurrentConvBeltSpeed;
-    TextView txtViewNewConvBeltSpeed;
+    TextView txtViewCurrentConvBeltSpeedValue;
+    TextView txtViewNewConvBeltSpeedValue;
+    TextView txtViewDistanceSensor1Value;
+    TextView txtViewColorSensorValue;
+    TextView txtViewDistanceSensor2Value;
+    TextView txtViewServoValue;
     private MQTTBroadcastReceiver mqttReceiver;
     private String username;
     private String aioKey;
@@ -72,6 +76,10 @@ public class SettingsActivity extends AppCompatActivity {
         setViewModelResponses();
 
         TopicPublisher.subscribeTopic(username, Constants.DC_ENGINE_FEED_KEY, mqttViewModel);
+        TopicPublisher.subscribeTopic(username, Constants.DISTANCE_SENSOR_1_FEED_KEY, mqttViewModel);
+        TopicPublisher.subscribeTopic(username, Constants.COLOR_SENSOR_FEED_KEY, mqttViewModel);
+        TopicPublisher.subscribeTopic(username, Constants.DISTANCE_SENSOR_2_FEED_KEY, mqttViewModel);
+        TopicPublisher.subscribeTopic(username, Constants.SERVO_FEED_KEY, mqttViewModel);
         TopicPublisher.subscribeTopic(username, Constants.CREDENTIALS_ERROR, mqttViewModel);
 
         mqttReceiver = new MQTTBroadcastReceiver();
@@ -101,7 +109,7 @@ public class SettingsActivity extends AppCompatActivity {
                 editor.putInt(KEY_SEEKBAR_CONV_BELT, progress);
                 editor.apply();
 
-                txtViewNewConvBeltSpeed.setText(String.valueOf(progress));
+                txtViewNewConvBeltSpeedValue.setText(String.valueOf(progress));
             }
 
             @Override
@@ -118,16 +126,32 @@ public class SettingsActivity extends AppCompatActivity {
         btnUpdateConvBeltSpeedSettings = findViewById(R.id.btn_update_conv_belt_speed_settings);
 
         btnUpdateConvBeltSpeedSettings.setOnClickListener(v -> {
-            MQTTService.sendTopicMessageToAdafruit(username + "/feeds/dcengine", (String) txtViewNewConvBeltSpeed.getText());
+            MQTTService.sendTopicMessageToAdafruit(username + "/feeds/dcengine", (String) txtViewNewConvBeltSpeedValue.getText());
         });
 
-        txtViewNewConvBeltSpeed = findViewById(R.id.txt_view_new_conv_belt_speed_settings);
+        txtViewNewConvBeltSpeedValue = findViewById(R.id.txt_view_new_conv_belt_speed_settings);
 
-        txtViewNewConvBeltSpeed.setText(String.valueOf(convBeltValue));
+        txtViewNewConvBeltSpeedValue.setText(String.valueOf(convBeltValue));
 
-        txtViewCurrentConvBeltSpeed = findViewById(R.id.txt_view_current_conv_belt_speed_settings);
+        txtViewCurrentConvBeltSpeedValue = findViewById(R.id.txt_view_current_conv_belt_speed_settings);
 
-        txtViewCurrentConvBeltSpeed.setText("N/A");
+        txtViewCurrentConvBeltSpeedValue.setText("N/A");
+
+        txtViewDistanceSensor1Value = findViewById(R.id.txt_view_distance_sensor_1_value_settings);
+
+        txtViewDistanceSensor1Value.setText("waiting...");
+
+        txtViewColorSensorValue = findViewById(R.id.txt_view_color_sensor_value_settings);
+
+        txtViewColorSensorValue.setText("waiting...");
+
+        txtViewDistanceSensor2Value = findViewById(R.id.txt_view_distance_sensor_2_value_settings);
+
+        txtViewDistanceSensor2Value.setText("waiting...");
+
+        txtViewServoValue = findViewById(R.id.txt_view_servo_value_settings);
+
+        txtViewServoValue.setText("waiting...");
 
         MQTTManager.getTopicLatestValue(username, aioKey, Constants.DC_ENGINE_FEED_KEY, mqttViewModel);
 
@@ -143,7 +167,22 @@ public class SettingsActivity extends AppCompatActivity {
             Log.d("Settings", "Recibido ViewModel desde Settings");
             Log.d("Settings", "Topic:   " + mqttMsg.topic + "  Message: " + mqttMsg.message);
             if (mqttMsg.topic.equals(Constants.DC_ENGINE_FEED_KEY)) {
-                txtViewCurrentConvBeltSpeed.setText(mqttMsg.message);
+                txtViewCurrentConvBeltSpeedValue.setText(mqttMsg.message);
+            }
+            if (mqttMsg.topic.equals(Constants.DISTANCE_SENSOR_1_FEED_KEY)) {
+                txtViewDistanceSensor1Value.setText(mqttMsg.message);
+                txtViewColorSensorValue.setText("waiting...");
+                txtViewServoValue.setText("waiting...");
+                txtViewDistanceSensor2Value.setText("waiting...");
+            }
+            if (mqttMsg.topic.equals(Constants.COLOR_SENSOR_FEED_KEY)) {
+                txtViewColorSensorValue.setText(mqttMsg.message);
+            }
+            if (mqttMsg.topic.equals(Constants.DISTANCE_SENSOR_2_FEED_KEY)) {
+                txtViewDistanceSensor2Value.setText(mqttMsg.message);
+            }
+            if (mqttMsg.topic.equals(Constants.SERVO_FEED_KEY)) {
+                txtViewServoValue.setText(mqttMsg.message);
             }
             if (mqttMsg.topic.equals(Constants.CREDENTIALS_ERROR)) {
                 Toast.makeText(this, "Invalid credentials, please try again", Toast.LENGTH_SHORT).show();
