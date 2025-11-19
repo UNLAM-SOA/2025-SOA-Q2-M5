@@ -159,7 +159,7 @@ const char *mqtt_server = "io.adafruit.com";
 const int port = 1883;
 
 const char *user_name = "prodlineclassifier";
-const char *user_pass = "INGRESAR KEY ADAFRUIT";
+const char *user_pass = "AQUI API ADAFRUIT KEY";
 const char *clientId = "conveyorBelt";
 
 // TOPICOS MQTT
@@ -169,11 +169,6 @@ const char *topic_conveyor_belt_color = "prodlineclassifier/feeds/colorsensor";
 const char *topic_conveyor_belt_servo = "prodlineclassifier/feeds/servo";
 const char *topic_conveyor_belt_dist_sensor1 = "prodlineclassifier/feeds/distancesensor1";
 const char *topic_conveyor_belt_dist_sensor2 = "prodlineclassifier/feeds/distancesensor2";
-const char *topic_conveyor_belt_blink_red_led = "prodlineclassifier/feeds/blinkredled";
-const char *topic_conveyor_belt_green_led = "prodlineclassifier/feeds/greenled";
-const char *topic_conveyor_belt_red_led = "prodlineclassifier/feeds/redled";
-const char *topic_conveyor_belt_yellow_led = "prodlineclassifier/feeds/yellowled";
-
 
 
 
@@ -302,6 +297,7 @@ void sensors_task(void *pv) {
 
     // Distancia fin
     if (verifyObjectAtEnd()) {
+      vTaskDelay(pdMS_TO_TICKS(DELAY_500_MS));
       events ev = EV_OBJECT_AT_END;
       xQueueSend(eventQueue, &ev, portMAX_DELAY);
     }
@@ -409,23 +405,21 @@ void wifiTask(void *p)
 
 void wifiConnect()
 {
-  //DebugPrint("Intentando conectar WiFi...");
   WiFi.mode(WIFI_STA);
   WiFi.disconnect(true);     // limpia estado anterior
   WiFi.begin(ssid, password);
-  //DebugPrint(ssid);
-  //DebugPrint(password);
+
   int intentos = 0;
   const int MAX_INTENTOS = 20; // 20 x 500ms = 10s de espera
 
   while (WiFi.status() != WL_CONNECTED && intentos < MAX_INTENTOS)
   { 
-    vTaskDelay(pdMS_TO_TICKS(DELAY_500_MS)); // wait 500ms
+    vTaskDelay(pdMS_TO_TICKS(DELAY_500_MS)); 
     intentos++;
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    DebugPrint(" WIFI Conectado.");
+    DebugPrint("WIFI Conectado.");
   } 
 }
 
@@ -446,8 +440,6 @@ void mqttReconnect() {
   static int intentos = 0;
   const int MAX_INTENTOS = 5;
 
-  DebugPrint("Intentando conexión MQTT...");
-
   if (client.connect(clientId, user_name, user_pass)) {
     DebugPrint("MQTT CONECTADO");
     client.subscribe(topic_conveyor_belt_speed);
@@ -463,6 +455,7 @@ void mqttReconnect() {
     }
   }
 }
+
 // ======== MQTT Callback ========
 // Función Callback que recibe los mensajes enviados por los dispositivos
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -475,15 +468,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
       return;
   }
   if (strcmp(topic, topic_conveyor_belt_state) == 0) {
-      // Este mensaje pertenece al tópico del motor
+      // Este mensaje pertenece al tópico de estado del embebido
       handleConveyorChangeState(message);
       return;
   }
-  
-
-  //aca puedo manejar otros topicos
-
-  DebugPrint("Tópico no reconocido");
 }
 
 void handleConveyorSpeed(const String &message) {
@@ -500,22 +488,20 @@ void handleConveyorSpeed(const String &message) {
 void handleConveyorChangeState(String message) {
     message.trim();   // Limpia \n, \r y espacios
     events ev;   // variable para enviar a la cola
-    
+
+    //RECIBO EL MENSAJE MQTT PARA CAMBIAR AL ESTADO ST_MANUAL_STOP
     if (message == "ST_MANUAL_STOP") {
         ev = EV_STOP_EXT;
         xQueueSend(eventQueue, &ev, portMAX_DELAY);
-        DebugPrint("Evento recibido: EV_STOP_EXT");
         return;
     }
-
-    if (message == "ST_RESTART") {
+    //RECIBO EL MENSAJE MQTT PARA CAMBIAR AL ESTADO ST_IDLE
+    if (message == "ST_IDLE") {
         ev = EV_RESTART_EXT;
         xQueueSend(eventQueue, &ev, portMAX_DELAY);
-        DebugPrint("Evento recibido: EV_RESTART_EXT");
         return;
     }
 
-    DebugPrint("Evento desconocido recibido: " + message);
 }
 
 /****************************************************** 
@@ -554,29 +540,7 @@ void publish_distance_sensor2(int value) {
   }
 }
 
-void publish_blink_red_led(bool state) {
-  if (client.connected()) {
-    client.publish(topic_conveyor_belt_blink_red_led, state ? "1" : "0");
-  }
-}
 
-void publish_green_led(bool state) {
-  if (client.connected()) {
-    client.publish(topic_conveyor_belt_green_led, state ? "1" : "0");
-  }
-}
-
-void publish_red_led(bool state) {
-  if (client.connected()) {
-    client.publish(topic_conveyor_belt_red_led, state ? "1" : "0");
-  }
-}
-
-void publish_yellow_led(bool state) {
-  if (client.connected()) {
-    client.publish(topic_conveyor_belt_yellow_led, state ? "1" : "0");
-  }
-}
 //------------------END MQTT PUBLISH FUNCTIONS----------------
 
 /****************************************************** 
@@ -831,11 +795,6 @@ DetectedColor readColorSensor() {
   int blueValue = map(Blue, BMIN, BMAX, 255, 0);
   vTaskDelay(pdMS_TO_TICKS(STABILIZE_COLOR_DELAY));
 
-  /*
-  Serial.printf("R: %d | RB: %d\n", redValue, redBase);
-  Serial.printf("G: %d | GBase: %d\n", greenValue, greenBase);
-  Serial.printf("B: %d | BBase: %d\n", blueValue, blueBase);
-  */
   // --- Detección de ausencia de objeto ---
   if (abs(redValue - redBase)   < redBase   * COLOR_DIFF_FACTOR &&
       abs(blueValue - blueBase) < blueBase  * COLOR_DIFF_FACTOR &&
@@ -862,7 +821,6 @@ bool verifyColorSensor(DetectedColor &detected) {
   static bool alreadyReported = false;
   
   DetectedColor current = readColorSensor();
-  //Serial.printf("Current: %d \n", current);
   
   // RESET cuando no hay objeto
   if (current == NONE) {
@@ -919,7 +877,6 @@ int readDistanceSensor(stDistanceSensor distance_sensor)
 
 bool verifyObjectAtStart(){  
     distanceSensors[DISTANCE_SENSOR1].current_value = readDistanceSensor(distanceSensors[DISTANCE_SENSOR1]);
-    //DebugPrint(distanceSensors[DISTANCE_SENSOR1].current_value);
     int current_value = distanceSensors[DISTANCE_SENSOR1].current_value;
     static bool objectDetected = false;
 
@@ -938,7 +895,6 @@ bool verifyObjectAtStart(){
 
 bool verifyObjectAtEnd(){  
     distanceSensors[DISTANCE_SENSOR2].current_value = readDistanceSensor(distanceSensors[DISTANCE_SENSOR2]);
-    //DebugPrint(distanceSensors[DISTANCE_SENSOR2].current_value);
 
     int current_value = distanceSensors[DISTANCE_SENSOR2].current_value;
     static bool objectDetected = false;
@@ -997,8 +953,6 @@ void get_new_event( )
   //se bloquea en espera de un nuevo evento
   if( xQueueReceive(eventQueue, &new_event, portMAX_DELAY) == pdPASS )
   {
-    //Serial.print("DEBUG: Evento recibido de la cola -> ");
-    //Serial.println(events_s[new_event]);
      if (new_event != current_event) {
       current_event = new_event;
     }  
