@@ -227,23 +227,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int color;
 
         switch (newSystemStatus) {
-            case "ST_IDLE":
-                if(!systemStatus.equals("ST_MANUAL_STOP")
+            case Constants.SYSTEM_STATUS_IDLE:
+                if(!systemStatus.equals(Constants.SYSTEM_STATUS_MANUAL_STOP)
                     && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
 
                     Toast.makeText(this, "System is already running", Toast.LENGTH_SHORT).show();
 
                     return;
                 }
-                /*
-                if(!systemStatus.equals("ST_MANUAL_STOP")
-                    && !systemStatus.equals("Emergency Stopped")
-                    && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
-                {
-                    Toast.makeText(this, "System is offline", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                */
                 color = Color.parseColor(getString(R.string.color_sysstat_idle));
                 if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
                 {
@@ -251,12 +242,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 }
                 txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
-            case "ST_COLOR_DETECTED":
+            case Constants.SYSTEM_STATUS_COLOR_DETECTED:
                 color = Color.parseColor(getString(R.string.color_sysstat_running));
                 txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
-            case "ST_MANUAL_STOP":
-                if(systemStatus.equals("ST_MANUAL_STOP")
+            case Constants.SYSTEM_STATUS_MANUAL_STOP:
+                if(systemStatus.equals(Constants.SYSTEM_STATUS_MANUAL_STOP)
                    && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
                     Toast.makeText(this, "System isn't running right now", Toast.LENGTH_SHORT).show();
                     return;
@@ -268,7 +259,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 }
                 txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
-            case "ST_ERROR":
+            case Constants.SYSTEM_STATUS_ERROR:
                 color = Color.parseColor(getString(R.string.color_sysstat_emergency_stopped));
                 txtViewSystemStatus.setTextColor(Color.parseColor("#FFFFFF"));
                 break;
@@ -283,12 +274,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         bgDrawable.setColor(color);
     }
 
-    /**
-     * Método a ejecutar cuando se detecta una sacudida.
-     * @param count El número de sacudidas detectadas en la ráfaga actual.
-     */
+     // método a ejecutar cuando se detecta un shake
+     // count lleva el número de sacudidas detectadas en la ráfaga actual
     private void handleShakeEvent(int count) {
-        // Para que solo se ejecute una vez por ráfaga, si count == 1
+        // para que solo se ejecute una vez por ráfaga -> count == 1
         if(count == 1)
         {
             String message = "Restarting the system...";
