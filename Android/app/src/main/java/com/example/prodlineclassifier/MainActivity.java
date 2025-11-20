@@ -227,14 +227,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int color;
 
         switch (newSystemStatus) {
-            case Constants.SYSTEM_STATUS_IDLE:
-                if(!systemStatus.equals(Constants.SYSTEM_STATUS_MANUAL_STOP)
-                    && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
+            case "ST_IDLE":
+                if (source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
 
-                    Toast.makeText(this, "System is already running", Toast.LENGTH_SHORT).show();
-
-                    return;
+                    // ÚNICO estado con mensaje especial
+                    if (systemStatus.equals("ST_ERROR")) {
+                        Toast.makeText(this, "System is in ERROR state and cannot start", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    // Mensaje para el resto de los estados
+                    if (!systemStatus.equals("ST_MANUAL_STOP")) {
+                        Toast.makeText(this, "System is already running", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                 }
+
                 color = Color.parseColor(getString(R.string.color_sysstat_idle));
                 if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
                 {
@@ -246,11 +253,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 color = Color.parseColor(getString(R.string.color_sysstat_running));
                 txtViewSystemStatus.setTextColor(Color.parseColor("#000000"));
                 break;
-            case Constants.SYSTEM_STATUS_MANUAL_STOP:
-                if(systemStatus.equals(Constants.SYSTEM_STATUS_MANUAL_STOP)
-                   && source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
-                    Toast.makeText(this, "System isn't running right now", Toast.LENGTH_SHORT).show();
-                    return;
+            case "ST_MANUAL_STOP":
+                if (source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN)) {
+
+                    if (systemStatus.equals("ST_IDLE")) {
+                        Toast.makeText(this, "System is idle and cannot be stopped", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (systemStatus.equals("ST_MANUAL_STOP") ||
+                            systemStatus.equals("ST_ERROR")) {
+                        Toast.makeText(this, "System isn't running right now", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                 }
                 color = Color.parseColor(getString(R.string.color_sysstat_manually_stopped));
                 if(source.equals(Constants.UPDATE_SYSSTAT_SOURCE_MAIN))
