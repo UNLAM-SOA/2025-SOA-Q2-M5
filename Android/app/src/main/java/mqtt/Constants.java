@@ -10,5 +10,9 @@ public class Constants {
     public static final String STATISTIC_REQ = "stat_req";
     public static final String UPDATE_SYSSTAT_SOURCE_MAIN = "Main";
     public static final String UPDATE_SYSSTAT_SOURCE_ADAFRUIT = "Adafruit";
+    public static final String SYSTEM_STATUS_IDLE = "ST_IDLE";
+    public static final String SYSTEM_STATUS_MANUAL_STOP = "ST_MANUAL_STOP";
+    public static final String SYSTEM_STATUS_COLOR_DETECTED = "ST_COLOR_DETECTED";
+    public static final String SYSTEM_STATUS_ERROR = "ST_ERROR";
     public static final String CREDENTIALS_ERROR = "err_cred";
 }
